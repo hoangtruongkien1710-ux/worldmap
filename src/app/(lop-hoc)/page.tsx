@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { CalendarClock, CheckCircle2, CircleAlert, MapPin, Presentation, User, Users } from "lucide-react";
 import { PageHeader } from "@/components/layout/app-shell";
+import type { Tone } from "@/components/layout/nav";
+import { TONE } from "@/components/ui/tone";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth/session";
 import { addDays, fmtDate, toDate, todayVN, WEEKDAY_LONG, weekday } from "@/lib/dates";
@@ -59,10 +61,10 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
       />
 
       <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Stat icon={<CalendarClock size={18} />} label="Buổi học hôm nay" value={held.length} />
-        <Stat icon={<CheckCircle2 size={18} />} label="Đã điểm danh hôm nay" value={`${marked}/${held.length}`} />
-        <Stat icon={<Presentation size={18} />} label="Lớp đang mở" value={openClasses} />
-        <Stat icon={<Users size={18} />} label="Học sinh đang học" value={activeStudents} />
+        <Stat tone="violet" icon={<CalendarClock size={20} />} label="Buổi học hôm nay" value={held.length} />
+        <Stat tone="emerald" icon={<CheckCircle2 size={20} />} label="Đã điểm danh hôm nay" value={`${marked}/${held.length}`} />
+        <Stat tone="indigo" icon={<Presentation size={20} />} label="Lớp đang mở" value={openClasses} />
+        <Stat tone="sky" icon={<Users size={20} />} label="Học viên đang học" value={activeStudents} />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -81,7 +83,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
                   <div className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-slate-500">
                     <span className="inline-flex items-center gap-1"><MapPin size={12} />{s.class.room?.name ?? "—"}</span>
                     <span className="inline-flex items-center gap-1"><User size={12} />{s.class.teacher?.fullName ?? "—"}</span>
-                    <span className="inline-flex items-center gap-1"><Users size={12} />{s.class._count.enrollments} học sinh</span>
+                    <span className="inline-flex items-center gap-1"><Users size={12} />{s.class._count.enrollments} học viên</span>
                   </div>
                 </div>
                 <div className="self-center">
@@ -112,7 +114,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         </section>
 
         <section className="card p-5">
-          <h2 className="mb-4 flex items-center gap-2 text-lg font-bold"><CircleAlert size={18} className="text-amber-500" /> Cần chú ý</h2>
+          <h2 className="mb-4 flex items-center gap-2 text-lg font-bold"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-600"><CircleAlert size={17} /></span> Cần chú ý</h2>
           {overdue.length === 0 ? (
             <p className="text-sm text-slate-500">Không có buổi nào quá hạn điểm danh.</p>
           ) : (
@@ -134,11 +136,15 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   );
 }
 
-function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; value: React.ReactNode }) {
+function Stat({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: React.ReactNode; tone: Tone }) {
+  const t = TONE[tone];
   return (
-    <div className="card p-4">
-      <div className="flex items-center gap-2 text-sm text-slate-500"><span className="text-brand-500">{icon}</span>{label}</div>
-      <div className="mt-2 text-2xl font-extrabold">{value}</div>
+    <div className="card flex items-center gap-3.5 p-4">
+      <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ring-4 ${t.tile} ${t.text} ${t.ring}`}>{icon}</span>
+      <div className="min-w-0">
+        <div className="text-[13px] leading-tight text-slate-500">{label}</div>
+        <div className="mt-0.5 text-2xl font-extrabold">{value}</div>
+      </div>
     </div>
   );
 }

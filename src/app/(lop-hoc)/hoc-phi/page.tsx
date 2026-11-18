@@ -9,7 +9,7 @@ export default async function Page() {
     <>
       <PageHeader title="Học phí" subtitle="Tự tính học phí theo tháng" />
       <ComingSoon phase="Giai đoạn 4" items={[
-        "Phiếu gộp theo học sinh và chi tiết theo lớp",
+        "Phiếu gộp theo học viên và chi tiết theo lớp",
         "Thu tiền, thu một phần, chốt phiếu, điều chỉnh",
         "Phiếu thu có mã VietQR, sao chép ảnh gửi Zalo",
       ]} />

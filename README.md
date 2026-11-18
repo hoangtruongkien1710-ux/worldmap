@@ -27,7 +27,9 @@ Mở http://localhost:3000.
 | `admin` | Quản trị viên (vào được cả Lớp học và Kế toán) |
 | `quanly` | Quản lý |
 | `ketoan` | Kế toán |
-| `gv.toan`, `gv.van`, `gv.anh` | Giáo viên (chỉ thấy lớp mình dạy) |
+| `gv.trung` (HSK), `gv.ngoc`, `gv.nam` (IELTS), `gv.huy` (TOEIC) | Giáo viên (chỉ thấy lớp mình dạy) |
+
+Dữ liệu mẫu gồm 13 khóa học theo bảng giá niêm yết 2026 (HSK, IELTS, TOEIC), 12 lớp, khoảng 100 học viên, điểm danh, và phần kế toán từ 01/09/2026: quỹ tiền mặt, 2 tài khoản ngân hàng, thu học phí, chi phí, công nợ nhà cung cấp, bảng lương tháng 9 và 10, toàn bộ bút toán kép.
 
 Sau lần chạy đầu, đặt lại `SEED_DEMO=false` (hoặc xóa dòng đó) và **đổi mật khẩu các tài khoản** trước khi dùng thật.
 

@@ -9,6 +9,7 @@ import {
   LayoutDashboard, List, LogOut, Menu, Presentation, Receipt, Settings, ShoppingCart, UserCog, Users, Wallet, X,
 } from "lucide-react";
 import type { NavGroup } from "./nav";
+import { TONE } from "@/components/ui/tone";
 
 const ICONS = {
   home: House, calendar: CalendarDays, presentation: Presentation, users: Users, receipt: Receipt,
@@ -20,7 +21,7 @@ const ICONS = {
 type Props = {
   workspace: "classroom" | "accounting";
   nav: NavGroup[];
-  brand: { title: string; tagline: string; centerName: string; footer: string };
+  brand: { title: string; tagline: string; centerName: string; footer: string; logoUrl: string };
   user: { fullName: string; roleLabel: string };
   switchTo?: { href: string; label: string };
   signOutAction: () => Promise<void>;
@@ -45,10 +46,12 @@ export function AppShell({ workspace, nav, brand, user, switchTo, signOutAction,
         )}
       >
         <div className="mb-4 flex items-center gap-3 px-2">
-          <div className={clsx("flex h-11 w-11 items-center justify-center rounded-xl text-xl text-white shadow-lg",
-            accounting ? "bg-acc-500 shadow-acc-500/30" : "bg-brand-500 shadow-brand-500/30")}>
-            {accounting ? "₫" : "🌏"}
-          </div>
+          {brand.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={brand.logoUrl} alt="Logo" className="h-12 w-12 shrink-0 object-contain" />
+          ) : (
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-500 text-xl text-white">W</div>
+          )}
           <div className="min-w-0">
             <div className={clsx("truncate font-extrabold tracking-tight", accounting ? "text-acc-700" : "text-brand-700")}>
               {accounting ? "KẾ TOÁN" : brand.title}
@@ -66,13 +69,18 @@ export function AppShell({ workspace, nav, brand, user, switchTo, signOutAction,
               {g.items.map((it) => {
                 const Icon = ICONS[it.icon as keyof typeof ICONS] ?? House;
                 const active = isActive(it.href);
+                const tone = TONE[it.tone];
                 return (
                   <Link key={it.href} href={it.href} onClick={() => setOpen(false)}
-                    className={clsx("flex items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] font-medium transition",
+                    className={clsx("group flex items-center gap-3 rounded-xl px-2 py-1.5 text-[15px] font-medium transition",
                       active
                         ? accounting ? "bg-acc-500 text-white shadow-md shadow-acc-500/25" : "bg-brand-500 text-white shadow-md shadow-brand-500/25"
                         : "text-slate-700 hover:bg-slate-100")}>
-                    <Icon size={18} /> {it.label}
+                    <span className={clsx("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition",
+                      active ? "bg-white/20 text-white" : clsx(tone.tile, tone.text, "group-hover:scale-105"))}>
+                      <Icon size={17} strokeWidth={2.2} />
+                    </span>
+                    {it.label}
                   </Link>
                 );
               })}

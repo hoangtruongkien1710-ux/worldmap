@@ -1,18 +1,27 @@
-import { ComingSoon, PageHeader } from "@/components/layout/app-shell";
+import { PageHeader } from "@/components/layout/app-shell";
+import { CashBookTable, MonthNav, Tabs, monthLabel } from "@/components/accounting/ui";
+import { db } from "@/lib/db";
 import { guardPage } from "@/lib/auth/session";
+import { cashBook, pickMonth } from "@/lib/accounting/queries";
 
 export const metadata = { title: "Ngân hàng" };
+export const dynamic = "force-dynamic";
 
-export default async function Page() {
+export default async function Page({ searchParams }: { searchParams: Promise<{ thang?: string; tk?: string }> }) {
   await guardPage("accounting.view");
+  const sp = await searchParams;
+  const month = pickMonth(sp.thang);
+  const banks = await db.cashAccount.findMany({ where: { kind: "BANK", active: true }, orderBy: { code: "desc" } });
+  const acc = banks.find((b) => b.code === sp.tk) ?? banks[0];
+  if (!acc) return <PageHeader title="Sổ tiền gửi ngân hàng" subtitle="Chưa khai báo tài khoản ngân hàng" />;
+  const book = await cashBook(acc.id, month);
   return (
     <>
-      <PageHeader title="Ngân hàng" subtitle="Báo có, báo nợ, đối chiếu sao kê" />
-      <ComingSoon phase="Giai đoạn 5b" items={[
-        "Giấy báo có, báo nợ, chuyển tiền nội bộ",
-        "Nhập sao kê và tự khớp, gợi ý gạch nợ học phí",
-        "Sổ tiền gửi theo tài khoản",
-      ]} />
+      <PageHeader title="Sổ tiền gửi ngân hàng" subtitle={`${acc.bankName} · STK ${acc.accountNo} · ${monthLabel(month)}`} actions={<MonthNav month={month} base="/ke-toan/ngan-hang" params={{ tk: acc.code }} />} />
+      <div className="mb-4">
+        <Tabs items={banks.map((b) => ({ href: `/ke-toan/ngan-hang?tk=${b.code}&thang=${month}`, label: b.name, active: b.id === acc.id }))} />
+      </div>
+      <CashBookTable {...book} />
     </>
   );
 }

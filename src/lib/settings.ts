@@ -15,6 +15,7 @@ export async function getBrand() {
     title: String(s["center.sidebarTitle"] ?? "WORLDMAP EDU"),
     tagline: String(s["center.tagline"] ?? ""),
     centerName: String(s["center.name"] ?? "WorldMap EDU"),
-    footer: `${classes} lớp · ${students} học sinh`,
+    footer: `${classes} lớp đang mở · ${students} học viên`,
+    logoUrl: String(s["center.logoUrl"] ?? ""),
   };
 }

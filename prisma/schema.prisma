@@ -61,6 +61,7 @@ model Subject {
   classes Class[]
 }
 
+// Đối tượng / trình độ học viên (VD: THCS–THPT, Sinh viên – Người đi làm)
 model Grade {
   id       Int       @id @default(autoincrement())
   name     String    @unique
@@ -79,9 +80,51 @@ model Room {
   @@unique([branchId, name])
 }
 
+// ---------- Chương trình & khóa học (bảng giá niêm yết) ----------
+
+model Program {
+  id      String   @id @default(cuid())
+  code    String   @unique // HSK, IELTS, TOEIC
+  name    String
+  color   String   @default("#2463eb")
+  order   Int      @default(0)
+  courses Course[]
+}
+
+enum PriceUnit {
+  COURSE // giá trọn khóa
+  SESSION // giá theo buổi (lớp 1-1)
+}
+
+model Course {
+  id              String    @id @default(cuid())
+  programId       String
+  program         Program   @relation(fields: [programId], references: [id])
+  code            String    @unique // "HSK 1", "IELTS FDN", "TOEIC A"
+  name            String // "HSK 1", "IELTS Mindset 1"
+  level           String? // "HSK 1", "THCS–THPT", "BASIC"
+  description     String? // "Nhập môn tiếng Trung", "Mục tiêu 0–350 điểm"
+  target          String? // "Band 3.5–4.5"
+  sessionsMin     Int?
+  sessionsMax     Int?
+  sessionsPerWeek String? // "2", "2–3"
+  durationText    String? // "~3 tháng"
+  sessionHours    Decimal?  @db.Decimal(3, 1)
+  listedPrice     Int
+  priceUnit       PriceUnit @default(COURSE)
+  classSizeMin    Int?
+  classSizeMax    Int?
+  coursebook      String?
+  order           Int       @default(0)
+  active          Boolean   @default(true)
+  classes         Class[]
+}
+
 // ---------- Lớp học & lịch ----------
 
 enum FeeMode {
+  COURSE // Trọn khóa: học phí niêm yết của khóa (có thể chia đợt)
+  PER_SESSION // Theo buổi (VD: IELTS 1-1)
   MONTHLY_FIXED // Thu theo tháng
   PER_SCHEDULED // Theo số buổi học trong tháng
   PACKAGE // Theo gói buổi
@@ -105,6 +148,10 @@ model Class {
   name          String
   branchId      String
   branch        Branch          @relation(fields: [branchId], references: [id])
+  courseId      String?
+  course        Course?         @relation(fields: [courseId], references: [id])
+  totalSessions Int? // số buổi của khóa (lớp theo khóa)
+  maxStudents   Int?
   subjectId     Int?
   subject       Subject?        @relation(fields: [subjectId], references: [id])
   gradeId       Int?
@@ -199,6 +246,7 @@ model Student {
   attendance     Attendance[]
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
+  invoices       Invoice[]
 
   @@index([parentPhone])
   @@index([branchId, status])
@@ -262,6 +310,7 @@ enum PaymentMethod {
 model Invoice {
   id           String        @id @default(cuid())
   studentId    String
+  student      Student       @relation(fields: [studentId], references: [id])
   month        String // "2026-11"
   status       InvoiceStatus @default(OPEN)
   lockedAmount Int?
@@ -317,4 +366,190 @@ model AuditLog {
   createdAt DateTime @default(now())
 
   @@index([createdAt])
+}
+
+// =====================================================================
+// KẾ TOÁN (giao diện /ke-toan) – kiểu MISA rút gọn, bút toán kép
+// =====================================================================
+
+enum LedgerType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+model LedgerAccount {
+  code       String     @id // "111", "1111", "131", "5113", "642"…
+  name       String
+  parentCode String?
+  type       LedgerType
+  active     Boolean    @default(true)
+}
+
+enum CashKind {
+  CASH
+  BANK
+}
+
+model CashAccount {
+  id             String    @id @default(cuid())
+  code           String    @unique // "TM", "VCB", "TCB"
+  name           String
+  kind           CashKind
+  bankName       String?
+  accountNo      String?
+  ledgerCode     String // "1111" tiền mặt, "1121" tiền gửi ngân hàng
+  openingBalance Int       @default(0)
+  openingDate    DateTime  @db.Date
+  active         Boolean   @default(true)
+  txns           CashTxn[] @relation("TxnAccount")
+}
+
+enum Direction {
+  IN
+  OUT
+}
+
+model TxnCategory {
+  id            Int       @id @default(autoincrement())
+  code          String    @unique
+  name          String
+  direction     Direction
+  debitAccount  String? // TK Nợ mặc định (chi)
+  creditAccount String? // TK Có mặc định (thu)
+  order         Int       @default(0)
+  txns          CashTxn[]
+  payables      Payable[]
+}
+
+model Supplier {
+  id       String    @id @default(cuid())
+  code     String    @unique
+  name     String
+  phone    String?
+  taxCode  String?
+  note     String?
+  txns     CashTxn[]
+  payables Payable[]
+}
+
+model Employee {
+  id           String        @id @default(cuid())
+  code         String        @unique // trùng mã trên máy chấm công / bảng lương
+  fullName     String
+  department   String // GIAO_VIEN | VAN_PHONG
+  position     String?
+  userId       String?       @unique
+  active       Boolean       @default(true)
+  payrollLines PayrollLine[]
+}
+
+enum CashTxnType {
+  IN // phiếu thu / giấy báo có
+  OUT // phiếu chi / giấy báo nợ
+  TRANSFER // chuyển tiền nội bộ
+}
+
+model CashTxn {
+  id              String       @id @default(cuid())
+  code            String       @unique // PT2611-0001, PC2611-0001, BC…, BN…, CT…
+  type            CashTxnType
+  date            DateTime     @db.Date
+  accountId       String
+  account         CashAccount  @relation("TxnAccount", fields: [accountId], references: [id])
+  toAccountId     String?
+  categoryId      Int?
+  category        TxnCategory? @relation(fields: [categoryId], references: [id])
+  amount          Int
+  description     String
+  counterparty    String?
+  supplierId      String?
+  supplier        Supplier?    @relation(fields: [supplierId], references: [id])
+  studentId       String?
+  paymentId       String?      @unique // sinh tự động từ thu học phí
+  payableId       String?
+  payrollPeriodId String?
+  createdAt       DateTime     @default(now())
+  voidedAt        DateTime?
+
+  @@index([date])
+  @@index([accountId, date])
+}
+
+model Payable {
+  id          String       @id @default(cuid())
+  code        String       @unique
+  supplierId  String?
+  supplier    Supplier?    @relation(fields: [supplierId], references: [id])
+  categoryId  Int?
+  category    TxnCategory? @relation(fields: [categoryId], references: [id])
+  description String
+  amount      Int
+  billDate    DateTime     @db.Date
+  dueDate     DateTime     @db.Date
+  createdAt   DateTime     @default(now())
+}
+
+model PayrollPeriod {
+  id         String        @id @default(cuid())
+  month      String        @unique // "2026-10"
+  status     String // IMPORTED | LOCKED | PAID
+  sourceFile String
+  importedAt DateTime
+  lines      PayrollLine[]
+}
+
+model PayrollLine {
+  id               String        @id @default(cuid())
+  periodId         String
+  period           PayrollPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  employeeId       String
+  employee         Employee      @relation(fields: [employeeId], references: [id])
+  workDays         Decimal       @db.Decimal(5, 2)
+  teachingSessions Int?
+  baseSalary       Int
+  allowance        Int           @default(0)
+  bonus            Int           @default(0)
+  deduction        Int           @default(0)
+  insurance        Int           @default(0)
+  pit              Int           @default(0)
+  netPay           Int
+
+  @@unique([periodId, employeeId])
+}
+
+model JournalEntry {
+  id          String        @id @default(cuid())
+  date        DateTime      @db.Date
+  voucherType String // PT, PC, BC, BN, CT, HP (học phí), MH (mua hàng), LUONG, NVK
+  voucherNo   String
+  description String
+  sourceType  String? // CashTxn | Invoice | Payable | PayrollPeriod | MANUAL
+  sourceId    String?
+  lines       JournalLine[]
+  createdAt   DateTime      @default(now())
+
+  @@unique([voucherType, voucherNo])
+  @@index([date])
+  @@index([sourceType, sourceId])
+}
+
+model JournalLine {
+  id            String       @id @default(cuid())
+  entryId       String
+  entry         JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  accountCode   String
+  debit         Int          @default(0)
+  credit        Int          @default(0)
+  studentId     String?
+  supplierId    String?
+  employeeId    String?
+  cashAccountId String?
+  classId       String?
+
+  @@index([accountCode])
+  @@index([studentId])
+  @@index([supplierId])
 }
