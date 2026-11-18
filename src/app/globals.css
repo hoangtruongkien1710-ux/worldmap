@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-50: #eef4ff;
+  --color-brand-100: #dbe6fe;
+  --color-brand-500: #2463eb;
+  --color-brand-600: #1d4fd8;
+  --color-brand-700: #1a3fae;
+  --color-acc-50: #ecfdf8;
+  --color-acc-100: #d1faec;
+  --color-acc-500: #0f9d77;
+  --color-acc-600: #0b8263;
+  --color-acc-700: #0a6750;
+  --font-sans: "Be Vietnam Pro", ui-sans-serif, system-ui, "Segoe UI", Arial, sans-serif;
+}
+
+html, body { background: #f5f7fb; color: #15213a; }
+
+.card { @apply rounded-2xl border border-slate-200/70 bg-white shadow-[0_8px_26px_rgba(29,48,92,.045)]; }
+.btn { @apply inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50; }
+.btn-primary { @apply border-brand-500 bg-brand-500 text-white hover:bg-brand-600; }
+.input { @apply w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-100; }
+.badge { @apply inline-flex items-center rounded-lg px-2 py-0.5 text-xs font-semibold; }

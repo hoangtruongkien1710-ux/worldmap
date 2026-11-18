@@ -1,0 +1,320 @@
+// WorldMap – quản lý lớp học + kế toán (dùng chung một database)
+// Quy ước: tiền lưu số nguyên VND; ngày học lưu kiểu DATE; giờ lưu chuỗi "HH:mm".
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Danh mục chung ----------
+
+model Branch {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  name      String
+  address   String?
+  phone     String?
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  users     User[]
+  classes   Class[]
+  students  Student[]
+  rooms     Room[]
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  ACCOUNTANT
+  TEACHER
+}
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  fullName     String
+  role         Role
+  phone        String?
+  active       Boolean  @default(true)
+  branchId     String?
+  branch       Branch?  @relation(fields: [branchId], references: [id])
+  classes      Class[]  @relation("ClassTeacher")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+model Subject {
+  id      Int     @id @default(autoincrement())
+  name    String  @unique
+  classes Class[]
+}
+
+model Grade {
+  id       Int       @id @default(autoincrement())
+  name     String    @unique
+  order    Int       @default(0)
+  classes  Class[]
+  students Student[]
+}
+
+model Room {
+  id       Int     @id @default(autoincrement())
+  name     String
+  branchId String?
+  branch   Branch? @relation(fields: [branchId], references: [id])
+  classes  Class[]
+
+  @@unique([branchId, name])
+}
+
+// ---------- Lớp học & lịch ----------
+
+enum FeeMode {
+  MONTHLY_FIXED // Thu theo tháng
+  PER_SCHEDULED // Theo số buổi học trong tháng
+  PACKAGE // Theo gói buổi
+  PER_ATTENDED // Theo buổi đã học (có mặt)
+}
+
+enum ExcusedPolicy {
+  NONE // Không miễn giảm vắng phép
+  DEDUCT // Trừ tiền buổi vắng phép
+  CARRY_OVER // Bù sang tháng sau
+}
+
+enum ClassStatus {
+  OPEN
+  ENDED
+}
+
+model Class {
+  id            String          @id @default(cuid())
+  code          String          @unique
+  name          String
+  branchId      String
+  branch        Branch          @relation(fields: [branchId], references: [id])
+  subjectId     Int?
+  subject       Subject?        @relation(fields: [subjectId], references: [id])
+  gradeId       Int?
+  grade         Grade?          @relation(fields: [gradeId], references: [id])
+  roomId        Int?
+  room          Room?           @relation(fields: [roomId], references: [id])
+  teacherId     String?
+  teacher       User?           @relation("ClassTeacher", fields: [teacherId], references: [id])
+  color         String          @default("#2463eb")
+  startDate     DateTime        @db.Date
+  endDate       DateTime?       @db.Date
+  feeMode       FeeMode
+  unitPrice     Int // đ/tháng, đ/buổi hoặc đ/gói tùy feeMode
+  packageSize   Int? // số buổi trong gói (PACKAGE)
+  excusedPolicy ExcusedPolicy   @default(NONE)
+  status        ClassStatus     @default(OPEN)
+  schedules     ClassSchedule[]
+  sessions      Session[]
+  enrollments   Enrollment[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([branchId, status])
+  @@index([teacherId])
+}
+
+model ClassSchedule {
+  id        String    @id @default(cuid())
+  classId   String
+  class     Class     @relation(fields: [classId], references: [id], onDelete: Cascade)
+  weekday   Int // 0 = Chủ nhật … 6 = Thứ Bảy
+  startTime String // "18:00"
+  endTime   String
+  validFrom DateTime  @db.Date
+  validTo   DateTime? @db.Date
+
+  @@index([classId])
+}
+
+enum SessionStatus {
+  SCHEDULED
+  CANCELLED
+}
+
+enum SessionSource {
+  SCHEDULE
+  MAKEUP
+  MANUAL
+}
+
+model Session {
+  id            String        @id @default(cuid())
+  classId       String
+  class         Class         @relation(fields: [classId], references: [id], onDelete: Cascade)
+  date          DateTime      @db.Date
+  startTime     String
+  endTime       String
+  status        SessionStatus @default(SCHEDULED)
+  source        SessionSource @default(SCHEDULE)
+  cancelReason  String?
+  taughtContent String?
+  homework      String?
+  attendance    Attendance[]
+  createdAt     DateTime      @default(now())
+
+  @@unique([classId, date, startTime])
+  @@index([date])
+}
+
+// ---------- Học sinh, ghi danh, điểm danh ----------
+
+enum StudentStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Student {
+  id             String        @id @default(cuid())
+  code           String        @unique
+  fullName       String
+  branchId       String
+  branch         Branch        @relation(fields: [branchId], references: [id])
+  gradeId        Int?
+  grade          Grade?        @relation(fields: [gradeId], references: [id])
+  school         String?
+  parentName     String?
+  parentRelation String?
+  parentPhone    String?
+  status         StudentStatus @default(ACTIVE)
+  note           String?
+  enrollments    Enrollment[]
+  attendance     Attendance[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([parentPhone])
+  @@index([branchId, status])
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  LEFT
+}
+
+model Enrollment {
+  id              String           @id @default(cuid())
+  studentId       String
+  student         Student          @relation(fields: [studentId], references: [id])
+  classId         String
+  class           Class            @relation(fields: [classId], references: [id])
+  joinDate        DateTime         @db.Date
+  leaveDate       DateTime?        @db.Date
+  monthlyDiscount Int              @default(0)
+  percentDiscount Int              @default(0)
+  status          EnrollmentStatus @default(ACTIVE)
+  createdAt       DateTime         @default(now())
+
+  @@index([classId])
+  @@index([studentId])
+}
+
+enum AttendanceStatus {
+  PRESENT
+  EXCUSED
+  ABSENT
+}
+
+model Attendance {
+  id          String           @id @default(cuid())
+  sessionId   String
+  session     Session          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  studentId   String
+  student     Student          @relation(fields: [studentId], references: [id])
+  status      AttendanceStatus
+  note        String?
+  updatedById String?
+  updatedAt   DateTime         @updatedAt
+
+  @@unique([sessionId, studentId])
+  @@index([studentId])
+}
+
+// ---------- Học phí (dùng ở giai đoạn 4) ----------
+
+enum InvoiceStatus {
+  OPEN
+  LOCKED
+}
+
+enum PaymentMethod {
+  CASH
+  TRANSFER
+}
+
+model Invoice {
+  id           String        @id @default(cuid())
+  studentId    String
+  month        String // "2026-11"
+  status       InvoiceStatus @default(OPEN)
+  lockedAmount Int?
+  lockedDetail Json?
+  lockedAt     DateTime?
+  lockedById   String?
+  shareToken   String        @unique @default(cuid())
+  payments     Payment[]
+  createdAt    DateTime      @default(now())
+
+  @@unique([studentId, month])
+}
+
+model Payment {
+  id             String        @id @default(cuid())
+  invoiceId      String
+  invoice        Invoice       @relation(fields: [invoiceId], references: [id])
+  amount         Int
+  method         PaymentMethod
+  txnRef         String?
+  note           String?
+  paidAt         DateTime
+  collectedById  String
+  idempotencyKey String        @unique
+  voidedAt       DateTime?
+  createdAt      DateTime      @default(now())
+
+  @@index([paidAt])
+}
+
+model Adjustment {
+  id          String   @id @default(cuid())
+  studentId   String
+  classId     String?
+  month       String
+  amount      Int // âm = giảm, dương = thu thêm
+  reason      String
+  createdById String
+  createdAt   DateTime @default(now())
+
+  @@index([studentId, month])
+}
+
+// ---------- Nhật ký ----------
+
+model AuditLog {
+  id        BigInt   @id @default(autoincrement())
+  actorId   String?
+  action    String
+  entity    String
+  entityId  String?
+  detail    Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}

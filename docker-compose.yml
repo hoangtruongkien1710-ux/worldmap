@@ -1,0 +1,70 @@
+# Chạy toàn bộ hệ thống: docker compose up -d --build
+# Mở http://localhost:3000 (hoặc http://IP-may-chu:3000)
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: worldmap
+      POSTGRES_USER: worldmap
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-worldmap}
+      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U worldmap -d worldmap"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    build: .
+    image: worldmap-app:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://worldmap:${DB_PASSWORD:-worldmap}@db:5432/worldmap?schema=public
+      AUTH_SECRET: ${AUTH_SECRET:?Hay dat AUTH_SECRET trong file .env}
+      AUTH_URL: ${AUTH_URL:-http://localhost:3000}
+      AUTH_TRUST_HOST: "true"
+      SEED_DEMO: ${SEED_DEMO:-false}
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    volumes:
+      - uploads:/app/uploads
+
+  # Sao lưu database mỗi ngày, giữ 30 ngày, file nằm ở ./backups
+  backup:
+    image: prodrigestivill/postgres-backup-local:16
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: worldmap
+      POSTGRES_USER: worldmap
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-worldmap}
+      SCHEDULE: "@daily"
+      BACKUP_KEEP_DAYS: 30
+      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      - ./backups:/backups
+
+  # Bật khi đã có tên miền: docker compose --profile https up -d
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["https"]
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on: [app]
+
+volumes:
+  pgdata: {}
+  uploads: {}
+  caddy_data: {}

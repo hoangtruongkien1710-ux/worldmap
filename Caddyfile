@@ -1,0 +1,4 @@
+# Đổi tên miền bên dưới khi đã trỏ DNS về máy chủ. Caddy tự cấp chứng chỉ HTTPS.
+quanly.example.com {
+	reverse_proxy app:3000
+}

@@ -1,0 +1,14 @@
+# Chỉ chạy PostgreSQL để lập trình: docker compose -f docker-compose.dev.yml up -d
+# rồi chạy app bằng: npm run dev
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: worldmap
+      POSTGRES_USER: worldmap
+      POSTGRES_PASSWORD: worldmap
+      TZ: Asia/Ho_Chi_Minh
+    ports: ["5432:5432"]
+    volumes: [pgdata_dev:/var/lib/postgresql/data]
+volumes:
+  pgdata_dev: {}
