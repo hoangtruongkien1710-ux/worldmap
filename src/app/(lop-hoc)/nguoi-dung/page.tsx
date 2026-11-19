@@ -1,4 +1,7 @@
+import { KeyRound, Lock, LockOpen, Pencil, Plus, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/layout/app-shell";
+import { ActionForm, ConfirmButton, Field, Grid, ModalButton, RowMenu } from "@/components/ui/modal";
+import { createUser, deleteUser, resetPassword, setUserActive, updateUser } from "@/lib/actions/admin";
 import { db } from "@/lib/db";
 import { guardPage } from "@/lib/auth/session";
 import { ROLE_LABEL } from "@/lib/auth/permissions";
@@ -21,14 +24,22 @@ const ROLE_NOTE: Record<string, string> = {
 };
 
 export default async function Page() {
-  await guardPage("user.manage");
+  const me = await guardPage("user.manage");
   const users = await db.user.findMany({
     include: { classes: { where: { status: "OPEN" }, select: { code: true, color: true } } },
     orderBy: [{ role: "asc" }, { fullName: "asc" }],
   });
   return (
     <>
-      <PageHeader title="Người dùng" subtitle={`${users.length} tài khoản · mật khẩu mẫu Worldmap@2026, cần đổi trước khi dùng thật`} />
+      <PageHeader title="Người dùng" subtitle={`${users.length} tài khoản · mật khẩu mẫu Worldmap@2026, cần đổi trước khi dùng thật`}
+        actions={
+          <ModalButton variant="primary" label="Thêm tài khoản" icon={<Plus size={16} />} title="Thêm tài khoản">
+            <ActionForm action={createUser} submitLabel="Tạo tài khoản">
+              <UserFields />
+              <Field label="Mật khẩu ban đầu" hint="Ít nhất 8 ký tự, gửi cho người dùng và nhắc họ đổi"><input name="password" type="text" required minLength={8} className="input" autoComplete="off" /></Field>
+            </ActionForm>
+          </ModalButton>
+        } />
       <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {Object.entries(ROLE_NOTE).map(([r, note]) => (
           <div key={r} className="card p-4">
@@ -42,7 +53,7 @@ export default async function Page() {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-              <tr><th className="px-4 py-3">Họ tên</th><th className="px-3 py-3">Tên đăng nhập</th><th className="px-3 py-3">Vai trò</th><th className="px-3 py-3">Điện thoại</th><th className="px-3 py-3">Lớp đang dạy</th><th className="px-4 py-3">Trạng thái</th></tr>
+              <tr><th className="px-4 py-3">Họ tên</th><th className="px-3 py-3">Tên đăng nhập</th><th className="px-3 py-3">Vai trò</th><th className="px-3 py-3">Điện thoại</th><th className="px-3 py-3">Lớp đang dạy</th><th className="px-4 py-3">Trạng thái</th><th className="w-12" /></tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {users.map((u) => (
@@ -59,12 +70,56 @@ export default async function Page() {
                     </div>
                   </td>
                   <td className="px-4 py-2.5">{u.active ? <span className="badge bg-green-50 text-green-700">Đang dùng</span> : <span className="badge bg-slate-100 text-slate-500">Đã khóa</span>}</td>
+                  <td className="px-2 py-2.5 text-right">
+                    <RowMenu>
+                      <ModalButton variant="menu" label="Sửa thông tin" icon={<Pencil size={15} />} title={`Sửa tài khoản ${u.username}`}>
+                        <ActionForm action={updateUser.bind(null, u.id)}><UserFields u={u} /></ActionForm>
+                      </ModalButton>
+                      <ModalButton variant="menu" label="Đặt lại mật khẩu" icon={<KeyRound size={15} />} title={`Đặt lại mật khẩu · ${u.fullName}`} subtitle={u.username} size="sm">
+                        <ActionForm action={resetPassword.bind(null, u.id)} submitLabel="Đặt lại">
+                          <Field label="Mật khẩu mới"><input name="password" type="password" required minLength={8} className="input" autoComplete="new-password" /></Field>
+                          <Field label="Nhập lại"><input name="password2" type="password" required minLength={8} className="input" autoComplete="new-password" /></Field>
+                        </ActionForm>
+                      </ModalButton>
+                      {u.id !== me.id && (u.active ? (
+                        <ConfirmButton variant="menu" label="Khóa tài khoản" icon={<Lock size={15} />} title={`Khóa ${u.username}?`} confirmLabel="Khóa"
+                          message="Người này sẽ không đăng nhập được nữa. Dữ liệu lớp, điểm danh vẫn giữ nguyên, có thể mở khóa lại." action={setUserActive.bind(null, u.id, false)} />
+                      ) : (
+                        <ConfirmButton variant="menu" label="Mở khóa" icon={<LockOpen size={15} />} title={`Mở khóa ${u.username}?`} confirmLabel="Mở khóa" message="Người này đăng nhập lại được." action={setUserActive.bind(null, u.id, true)} />
+                      ))}
+                      {u.id !== me.id && (
+                        <ConfirmButton label="Xóa tài khoản" icon={<Trash2 size={15} />} title={`Xóa tài khoản ${u.username}?`}
+                          message="Chỉ xóa được tài khoản chưa gán lớp nào. Nếu người này đã nghỉ, nên khóa tài khoản để giữ lịch sử." action={deleteUser.bind(null, u.id)} />
+                      )}
+                    </RowMenu>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </div>
+    </>
+  );
+}
+
+function UserFields({ u }: { u?: { username: string; fullName: string; role: string; phone: string | null } }) {
+  return (
+    <>
+      <Grid>
+        <Field label="Họ tên"><input name="fullName" defaultValue={u?.fullName} required className="input" /></Field>
+        <Field label="Tên đăng nhập" hint={u ? "Không đổi được" : "Chữ không dấu, VD: gv.lan"}>
+          <input name="username" defaultValue={u?.username} disabled={!!u} required={!u} className="input font-mono" autoComplete="off" />
+        </Field>
+      </Grid>
+      <Grid>
+        <Field label="Vai trò">
+          <select name="role" defaultValue={u?.role ?? "TEACHER"} className="input">
+            {Object.entries(ROLE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+        </Field>
+        <Field label="Điện thoại"><input name="phone" defaultValue={u?.phone ?? ""} inputMode="tel" className="input" /></Field>
+      </Grid>
     </>
   );
 }

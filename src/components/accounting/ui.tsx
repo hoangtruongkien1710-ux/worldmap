@@ -70,10 +70,12 @@ export function VoucherBadge({ code }: { code: string }) {
   return <span className={`badge whitespace-nowrap ${v.cls}`}>{v.label}</span>;
 }
 
-type BookRow = { id: string; code: string; date: string; description: string; counterparty: string | null; label: string; in: number; out: number; balance: number };
+export type BookRow = { id: string; code: string; date: string; description: string; counterparty: string | null; label: string; linked?: string | null; in: number; out: number; balance: number };
 
 /** Bảng sổ quỹ / sổ tiền gửi có số dư lũy kế. */
-export function CashBookTable({ opening, rows, totalIn, totalOut, closing }: { opening: number; rows: BookRow[]; totalIn: number; totalOut: number; closing: number }) {
+export function CashBookTable({ opening, rows, totalIn, totalOut, closing, action }: {
+  opening: number; rows: BookRow[]; totalIn: number; totalOut: number; closing: number; action?: (r: BookRow) => React.ReactNode;
+}) {
   return (
     <div className="card overflow-hidden">
       <div className="overflow-x-auto">
@@ -81,15 +83,15 @@ export function CashBookTable({ opening, rows, totalIn, totalOut, closing }: { o
           <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-4 py-3">Ngày</th><th className="px-3 py-3">Số chứng từ</th><th className="px-3 py-3">Diễn giải</th>
-              <th className="px-3 py-3 text-right">Thu</th><th className="px-3 py-3 text-right">Chi</th><th className="px-4 py-3 text-right">Tồn</th>
+              <th className="px-3 py-3 text-right">Thu</th><th className="px-3 py-3 text-right">Chi</th><th className="px-4 py-3 text-right">Tồn</th>{action && <th className="w-12" />}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             <tr className="bg-slate-50/60 font-semibold">
               <td className="px-4 py-2.5" colSpan={5}>Số dư đầu kỳ</td>
-              <td className="px-4 py-2.5 text-right">{money(opening)}</td>
+              <td className="px-4 py-2.5 text-right">{money(opening)}</td>{action && <td />}
             </tr>
-            {rows.length === 0 && <tr><td colSpan={6} className="px-4 py-6 text-center text-slate-500">Không có chứng từ trong tháng.</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={7} className="px-4 py-6 text-center text-slate-500">Không có chứng từ trong tháng.</td></tr>}
             {rows.map((r) => (
               <tr key={r.id} className="hover:bg-slate-50/60">
                 <td className="whitespace-nowrap px-4 py-2.5 text-slate-600">{fmtDate(r.date)}</td>
@@ -101,6 +103,7 @@ export function CashBookTable({ opening, rows, totalIn, totalOut, closing }: { o
                 <td className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-emerald-700">{r.in ? money(r.in) : ""}</td>
                 <td className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-rose-600">{r.out ? money(r.out) : ""}</td>
                 <td className="whitespace-nowrap px-4 py-2.5 text-right">{money(r.balance)}</td>
+                {action && <td className="px-2 py-2.5 text-right">{action(r)}</td>}
               </tr>
             ))}
           </tbody>
@@ -109,7 +112,7 @@ export function CashBookTable({ opening, rows, totalIn, totalOut, closing }: { o
               <td className="px-4 py-3" colSpan={3}>Cộng phát sinh · Số dư cuối kỳ</td>
               <td className="px-3 py-3 text-right text-emerald-700">{money(totalIn)}</td>
               <td className="px-3 py-3 text-right text-rose-600">{money(totalOut)}</td>
-              <td className="px-4 py-3 text-right">{money(closing)}</td>
+              <td className="px-4 py-3 text-right">{money(closing)}</td>{action && <td />}
             </tr>
           </tfoot>
         </table>

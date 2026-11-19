@@ -1,6 +1,10 @@
 import Link from "next/link";
 import clsx from "clsx";
-import { ChevronLeft, ChevronRight, MapPin, User } from "lucide-react";
+import { CalendarPlus, ChevronLeft, ChevronRight, ClipboardCheck, MapPin, RotateCcw, Trash2, User, XCircle } from "lucide-react";
+import { ConfirmButton, ModalButton, RowMenu } from "@/components/ui/modal";
+import { AddSessionForm, CancelSessionForm } from "@/components/classes/session-forms";
+import { deleteSession, restoreSession } from "@/lib/actions/sessions";
+import { can } from "@/lib/auth/permissions";
 import { PageHeader } from "@/components/layout/app-shell";
 import { db } from "@/lib/db";
 import { guardPage } from "@/lib/auth/session";
@@ -18,6 +22,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ t
   const isTeacher = user.role === "TEACHER";
   const teachers = isTeacher ? [] : await db.user.findMany({ where: { role: "TEACHER", active: true }, orderBy: { fullName: "asc" } });
   const teacherId = isTeacher ? user.id : teachers.find((t) => t.username === sp.gv)?.id;
+  const manage = can(user.role, "class.manage");
+  const openClasses = manage ? await db.class.findMany({ where: { status: "OPEN" }, orderBy: { code: "asc" }, select: { id: true, code: true, name: true } }) : [];
 
   const sessions = await db.session.findMany({
     where: { date: { gte: toDate(days[0]), lte: toDate(days[6]) }, ...(teacherId ? { class: { teacherId } } : {}) },
@@ -39,13 +45,18 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ t
       <PageHeader
         title="Lịch học"
         subtitle={`Tuần ${fmtDate(days[0])} – ${fmtDate(days[6])} · ${sessions.filter((s) => s.status === "SCHEDULED").length} buổi`}
-        actions={
+        actions={<>
+          {manage && (
+            <ModalButton variant="primary" label="Thêm buổi học" icon={<CalendarPlus size={16} />} title="Thêm buổi học bù / buổi thêm" size="sm">
+              <AddSessionForm classes={openClasses} />
+            </ModalButton>
+          )}
           <div className="inline-flex items-center rounded-xl bg-white ring-1 ring-slate-200">
             <Link href={link({ tuan: addDays(monday, -7) })} className="rounded-l-xl p-2 text-slate-500 hover:bg-slate-50" aria-label="Tuần trước"><ChevronLeft size={18} /></Link>
             <Link href={link({ tuan: mondayOf(today) })} className="px-3 text-sm font-semibold">Tuần này</Link>
             <Link href={link({ tuan: addDays(monday, 7) })} className="rounded-r-xl p-2 text-slate-500 hover:bg-slate-50" aria-label="Tuần sau"><ChevronRight size={18} /></Link>
           </div>
-        }
+        </>}
       />
       {!isTeacher && (
         <div className="mb-5 flex flex-wrap gap-2 text-sm">
@@ -72,8 +83,27 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ t
                   return (
                     <div key={s.id} className={clsx("rounded-lg p-2 text-xs", cancelled && "opacity-60")} style={{ background: `${s.class.color}14`, borderLeft: `3px solid ${s.class.color}` }}>
                       <div className="flex items-center justify-between gap-1 font-bold text-slate-800">{s.startTime}–{s.endTime}
-                        {s.source === "MAKEUP" && <span className="rounded bg-violet-600 px-1 text-[10px] font-semibold text-white">Học bù</span>}
-                        {s.source === "MANUAL" && <span className="rounded bg-sky-600 px-1 text-[10px] font-semibold text-white">Buổi thêm</span>}
+                        <span className="inline-flex items-center gap-0.5">
+                          {s.source === "MAKEUP" && <span className="rounded bg-violet-600 px-1 text-[10px] font-semibold text-white">Học bù</span>}
+                          {s.source === "MANUAL" && <span className="rounded bg-sky-600 px-1 text-[10px] font-semibold text-white">Buổi thêm</span>}
+                          {manage && (
+                            <RowMenu>
+                              {!cancelled && d <= today && (
+                                <Link href={`/lop-hoc/${s.class.code}?tab=diem-danh&thang=${d.slice(0, 7)}`} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-normal text-slate-700 hover:bg-slate-50"><ClipboardCheck size={15} />Điểm danh</Link>
+                              )}
+                              {cancelled ? (
+                                <ConfirmButton variant="menu" label="Khôi phục buổi" icon={<RotateCcw size={15} />} title="Khôi phục buổi học?" confirmLabel="Khôi phục" message={`${s.class.name} · ${fmtDate(d)} ${s.startTime}`} action={restoreSession.bind(null, s.id)} />
+                              ) : (
+                                <ModalButton variant="menu" label="Cho nghỉ buổi này" icon={<XCircle size={15} />} title="Cho nghỉ buổi học" subtitle={`${s.class.name} · ${fmtDate(d)} ${s.startTime}`} size="sm">
+                                  <CancelSessionForm sessionId={s.id} hasAttendance={marked} />
+                                </ModalButton>
+                              )}
+                              {s.source !== "SCHEDULE" && !marked && (
+                                <ConfirmButton label="Xóa buổi này" icon={<Trash2 size={15} />} title="Xóa buổi học?" message={`${s.class.name} · ${fmtDate(d)} ${s.startTime}. Chỉ xóa được buổi bù / buổi thêm chưa điểm danh.`} action={deleteSession.bind(null, s.id)} />
+                              )}
+                            </RowMenu>
+                          )}
+                        </span>
                       </div>
                       <Link href={`/lop-hoc/${s.class.code}`} className={clsx("block font-semibold leading-snug hover:underline", cancelled && "line-through")} style={{ color: s.class.color }}>{s.class.name}</Link>
                       {s.source === "MANUAL" && s.taughtContent && <div className="text-slate-600">{s.taughtContent}</div>}

@@ -71,9 +71,10 @@ export async function deleteStudent(studentId: string, _: ActionResult) {
 }
 
 /** Thêm nhiều học viên có sẵn vào lớp cùng lúc. */
-export async function enrollStudents(classId: string, _: ActionResult, f: FormData) {
+export async function enrollStudents(classIdArg: string | null, _: ActionResult, f: FormData) {
   return run(async () => {
     const user = await requirePermission("class.manage");
+    const classId = classIdArg || req(f, "classId", "lớp");
     const ids = f.getAll("studentIds").map(String).filter(Boolean);
     if (ids.length === 0) throw new UserError("Chọn ít nhất một học viên.");
     const joinDate = day(f, "joinDate", "ngày vào học");

@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, CalendarCheck, GraduationCap, Phone, Wallet } from "lucide-react";
+import { ArrowLeft, CalendarCheck, GraduationCap, Pencil, Phone, Plus, Trash2, Wallet } from "lucide-react";
+import { ActionForm, ConfirmButton, ModalButton, RowMenu } from "@/components/ui/modal";
+import { StudentFields } from "@/components/classes/forms";
+import { EnrollFields } from "@/components/classes/enroll-fields";
+import { deleteStudent, enrollStudents, leaveEnrollment, updateStudent } from "@/lib/actions/students";
+import { todayVN } from "@/lib/dates";
 import { PageHeader } from "@/components/layout/app-shell";
 import { db } from "@/lib/db";
 import { guardPage } from "@/lib/auth/session";
@@ -37,11 +42,34 @@ export default async function Page({ params }: { params: Promise<{ code: string 
   const count = (st: string) => att.filter((a) => a.status === st).length;
   const due = invoices.reduce((t, i) => t + i.total, 0);
   const paid = invoices.reduce((t, i) => t + i.paid, 0);
+  const manage = can(user.role, "student.manage");
+  const canEnroll = can(user.role, "class.manage");
+  const grades = manage ? await db.grade.findMany({ orderBy: { order: "asc" } }) : [];
+  const openClasses = canEnroll ? await db.class.findMany({ where: { status: "OPEN", enrollments: { none: { studentId: s.id, status: "ACTIVE" } } }, orderBy: { code: "asc" }, select: { id: true, code: true, name: true } }) : [];
 
   return (
     <>
       <Link href="/hoc-sinh" className="mb-3 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"><ArrowLeft size={15} /> Danh sách học viên</Link>
-      <PageHeader title={s.fullName} subtitle={`${s.code} · ${s.grade?.name ?? ""}${s.school ? ` · ${s.school}` : ""}`} />
+      <PageHeader title={s.fullName} subtitle={`${s.code} · ${s.grade?.name ?? ""}${s.school ? ` · ${s.school}` : ""}${s.status === "INACTIVE" ? " · đã nghỉ" : ""}`}
+        actions={manage && (
+          <>
+            {canEnroll && (
+              <ModalButton label="Ghi danh vào lớp" icon={<Plus size={16} />} title={`Ghi danh ${s.fullName}`} subtitle={s.code}>
+                <ActionForm action={enrollStudents.bind(null, null)} submitLabel="Ghi danh">
+                  <input type="hidden" name="studentIds" value={s.id} />
+                  <EnrollFields classes={openClasses} />
+                </ActionForm>
+              </ModalButton>
+            )}
+            <ModalButton variant="primary" label="Sửa hồ sơ" icon={<Pencil size={16} />} title={`Sửa hồ sơ ${s.fullName}`} subtitle={s.code} size="lg">
+              <ActionForm action={updateStudent.bind(null, s.id)}><StudentFields grades={grades} s={s} withStatus /></ActionForm>
+            </ModalButton>
+            <RowMenu>
+              <ConfirmButton label="Xóa học viên" icon={<Trash2 size={15} />} title={`Xóa học viên ${s.fullName}?`}
+                message="Chỉ xóa được học viên tạo nhầm (chưa điểm danh, chưa có học phí). Thao tác này không hoàn tác được." action={deleteStudent.bind(null, s.id)} />
+            </RowMenu>
+          </>
+        )} />
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="card p-4">
@@ -70,8 +98,18 @@ export default async function Page({ params }: { params: Promise<{ code: string 
             {s.enrollments.map((e) => (
               <li key={e.id} className="rounded-xl border border-slate-100 p-3" style={{ borderLeft: `4px solid ${e.class.color}` }}>
                 <div className="flex items-center justify-between gap-2">
-                  <b>{e.class.name}</b>
-                  <span className={`badge ${e.status === "ACTIVE" ? "bg-green-50 text-green-700" : "bg-slate-100 text-slate-500"}`}>{e.status === "ACTIVE" ? "Đang học" : "Đã kết thúc"}</span>
+                  <Link href={`/lop-hoc/${e.class.code}`} className="font-bold hover:underline">{e.class.name}</Link>
+                  <span className="inline-flex items-center gap-1">
+                    <span className={`badge ${e.status === "ACTIVE" ? "bg-green-50 text-green-700" : "bg-slate-100 text-slate-500"}`}>{e.status === "ACTIVE" ? "Đang học" : "Đã kết thúc"}</span>
+                    {canEnroll && e.status === "ACTIVE" && (
+                      <ModalButton variant="bare" className="rounded-md px-2 py-0.5 text-xs font-semibold text-slate-500 hover:bg-slate-100" label="Cho nghỉ" title={`Cho ${s.fullName} nghỉ lớp ${e.class.name}?`} size="sm">
+                        <ActionForm action={leaveEnrollment.bind(null, e.id)} submitLabel="Cho nghỉ">
+                          <p className="text-sm text-slate-600">Điểm danh và học phí đã có được giữ nguyên.</p>
+                          <label className="block text-sm font-medium">Ngày nghỉ<input type="date" name="leaveDate" defaultValue={todayVN()} required className="input mt-1" /></label>
+                        </ActionForm>
+                      </ModalButton>
+                    )}
+                  </span>
                 </div>
                 <div className="mt-0.5 text-xs text-slate-500">
                   GV {e.class.teacher?.fullName ?? "—"} · vào học {fmtDate(e.joinDate)}{e.leaveDate ? ` · kết thúc ${fmtDate(e.leaveDate)}` : ""}{e.percentDiscount ? ` · ưu đãi ${e.percentDiscount}%` : ""}

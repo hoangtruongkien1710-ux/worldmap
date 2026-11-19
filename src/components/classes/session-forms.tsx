@@ -2,9 +2,19 @@ import { ActionForm, Field, Grid } from "@/components/ui/modal";
 import { addSession, cancelSession } from "@/lib/actions/sessions";
 import { todayVN } from "@/lib/dates";
 
-export function AddSessionForm({ classId, defaultStart = "18:00", defaultEnd = "19:30", date }: { classId: string; defaultStart?: string; defaultEnd?: string; date?: string }) {
+export function AddSessionForm({ classId, classes, defaultStart = "18:00", defaultEnd = "19:30", date }: {
+  classId?: string; classes?: { id: string; code: string; name: string }[]; defaultStart?: string; defaultEnd?: string; date?: string;
+}) {
   return (
-    <ActionForm action={addSession.bind(null, classId)} submitLabel="Thêm buổi">
+    <ActionForm action={addSession.bind(null, classId ?? null)} submitLabel="Thêm buổi">
+      {!classId && classes && (
+        <Field label="Lớp">
+          <select name="classId" required defaultValue="" className="input">
+            <option value="" disabled>Chọn lớp</option>
+            {classes.map((c) => <option key={c.id} value={c.id}>{c.code} · {c.name}</option>)}
+          </select>
+        </Field>
+      )}
       <Field label="Loại buổi">
         <select name="source" className="input" defaultValue="MAKEUP">
           <option value="MAKEUP">Học bù (bù cho buổi đã nghỉ)</option>

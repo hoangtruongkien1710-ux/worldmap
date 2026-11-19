@@ -47,7 +47,7 @@ export async function cashBook(accountId: string, month: string) {
     const label = t.type === "TRANSFER"
       ? v > 0 ? `Nhận từ ${t.account.name}` : `Chuyển sang ${nameOf(t.toAccountId)}`
       : t.category?.name ?? "";
-    return { id: t.id, code: t.code, date: toDay(t.date), description: t.description, counterparty: t.counterparty, label, in: v > 0 ? v : 0, out: v < 0 ? -v : 0, balance: run };
+    return { id: t.id, code: t.code, date: toDay(t.date), description: t.description, counterparty: t.counterparty, label, linked: t.paymentId ? "Học phí" : t.payrollPeriodId ? "Tiền lương" : null, in: v > 0 ? v : 0, out: v < 0 ? -v : 0, balance: run };
   });
   return { account, opening, rows, totalIn, totalOut, closing: run };
 }

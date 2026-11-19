@@ -100,12 +100,12 @@ export function ActionForm({
 }
 
 /** Popup xác nhận xóa / thao tác không hoàn tác. */
-export function ConfirmButton({ label, icon, title, message, action, confirmLabel = "Xóa", variant = "danger-menu" }: {
+export function ConfirmButton({ label, icon, title, message, action, confirmLabel = "Xóa", variant = "danger-menu", className }: {
   label: React.ReactNode; icon?: React.ReactNode; title: string; message: React.ReactNode; action: FormAction; confirmLabel?: string;
-  variant?: "btn" | "menu" | "danger-menu";
+  variant?: "btn" | "menu" | "danger-menu" | "bare"; className?: string;
 }) {
   return (
-    <ModalButton label={label} icon={icon} title={title} size="sm" variant={variant}>
+    <ModalButton label={label} icon={icon} title={title} size="sm" variant={variant} className={className}>
       <ActionForm action={action} submitLabel={confirmLabel} danger>
         <div className="text-sm text-slate-600">{message}</div>
       </ActionForm>

@@ -65,9 +65,10 @@ export async function restoreSession(sessionId: string, _: ActionResult) {
 }
 
 /** Thêm buổi học bù hoặc buổi học thêm (thi thử, ôn tập…). */
-export async function addSession(classId: string, _: ActionResult, f: FormData) {
+export async function addSession(classIdArg: string | null, _: ActionResult, f: FormData) {
   return run(async () => {
     const user = await requirePermission("class.manage");
+    const classId = classIdArg || req(f, "classId", "lớp");
     const date = day(f, "date", "ngày học");
     const startTime = time(f, "startTime", "bắt đầu");
     const endTime = time(f, "endTime", "kết thúc");

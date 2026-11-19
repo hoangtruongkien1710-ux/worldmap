@@ -1,6 +1,10 @@
 import Link from "next/link";
 import clsx from "clsx";
-import { Search } from "lucide-react";
+import { Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { ActionForm, ConfirmButton, ModalButton, RowMenu } from "@/components/ui/modal";
+import { StudentFields } from "@/components/classes/forms";
+import { EnrollFields } from "@/components/classes/enroll-fields";
+import { createStudent, deleteStudent, updateStudent } from "@/lib/actions/students";
 import { PageHeader } from "@/components/layout/app-shell";
 import { db } from "@/lib/db";
 import { guardPage } from "@/lib/auth/session";
@@ -19,6 +23,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
   const showMoney = can(user.role, "tuition.view");
   const teacherId = user.role === "TEACHER" ? user.id : undefined;
   const status = sp.tt === "nghi" ? "LEFT" : "ACTIVE";
+  const unassigned = sp.tt === "chua-lop" && !teacherId;
+  const manage = can(user.role, "student.manage");
 
   const classes = await db.class.findMany({
     where: teacherId ? { teacherId } : {},
@@ -30,7 +36,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
 
   const students = await db.student.findMany({
     where: {
-      enrollments: { some: { status, ...(cls ? { classId: cls.id } : teacherId ? { class: { teacherId } } : {}) } },
+      ...(unassigned ? { enrollments: { none: {} } } : { enrollments: { some: { status, ...(cls ? { classId: cls.id } : teacherId ? { class: { teacherId } } : {}) } } }),
       ...(q ? { OR: [{ fullName: { contains: q, mode: "insensitive" } }, { code: { contains: q, mode: "insensitive" } }, { parentPhone: { contains: q } }] } : {}),
     },
     include: {
@@ -40,6 +46,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
     },
     orderBy: { code: "asc" },
   });
+  const grades = manage ? await db.grade.findMany({ orderBy: { order: "asc" } }) : [];
+  const openClasses = classes.filter((c) => c.status === "OPEN");
   const invoices = showMoney ? await loadInvoices({ studentId: { in: students.map((s) => s.id) } }) : [];
   const debt = (id: string) => invoices.filter((i) => i.studentId === id).reduce((s, i) => s + i.remain, 0);
 
@@ -53,7 +61,15 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
 
   return (
     <>
-      <PageHeader title="Học viên" subtitle={`${students.length} học viên ${status === "ACTIVE" ? "đang học" : "đã nghỉ / kết thúc khóa"}${cls ? ` · lớp ${cls.name}` : ""}`} />
+      <PageHeader title="Học viên" subtitle={`${students.length} học viên ${unassigned ? "chưa xếp lớp" : status === "ACTIVE" ? "đang học" : "đã nghỉ / kết thúc khóa"}${cls ? ` · lớp ${cls.name}` : ""}`}
+        actions={manage && (
+          <ModalButton variant="primary" label="Học viên mới" icon={<Plus size={16} />} title="Thêm học viên mới" subtitle="Mã học viên được tạo tự động" size="lg">
+            <ActionForm action={createStudent.bind(null, null)} submitLabel="Thêm học viên">
+              <StudentFields grades={grades} />
+              <EnrollFields classes={openClasses} optional />
+            </ActionForm>
+          </ModalButton>
+        )} />
 
       <form className="mb-4 flex flex-wrap items-center gap-2" action="/hoc-sinh">
         <div className="relative w-full sm:w-80">
@@ -64,8 +80,9 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
         {sp.tt && <input type="hidden" name="tt" value={sp.tt} />}
         <button className="btn">Tìm</button>
         <span className="mx-1 hidden h-6 w-px bg-slate-200 sm:block" />
-        <Chip href={qs({ tt: undefined })} active={status === "ACTIVE"}>Đang học</Chip>
-        <Chip href={qs({ tt: "nghi" })} active={status === "LEFT"}>Đã nghỉ / xong khóa</Chip>
+        <Chip href={qs({ tt: undefined })} active={status === "ACTIVE" && !unassigned}>Đang học</Chip>
+        <Chip href={qs({ tt: "nghi" })} active={status === "LEFT" && !unassigned}>Đã nghỉ / xong khóa</Chip>
+        {!teacherId && <Chip href={qs({ tt: "chua-lop", lop: undefined })} active={unassigned}>Chưa xếp lớp</Chip>}
       </form>
       <div className="mb-5 flex flex-wrap gap-2 text-sm">
         <Chip href={qs({ lop: undefined })} active={!cls}>Tất cả lớp</Chip>
@@ -82,10 +99,11 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
                 <th className="px-4 py-3">Học viên</th><th className="px-3 py-3">Đối tượng</th><th className="px-3 py-3">Phụ huynh / liên hệ</th>
                 <th className="px-3 py-3">Lớp</th><th className="px-3 py-3 text-right">Chuyên cần</th>
                 {showMoney && <th className="px-4 py-3 text-right">Còn nợ</th>}
+                {manage && <th className="w-12" />}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {students.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500">Không có học viên phù hợp.</td></tr>}
+              {students.length === 0 && <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-500">Không có học viên phù hợp.</td></tr>}
               {students.map((s) => {
                 const total = s.attendance.length;
                 const present = s.attendance.filter((a) => a.status === "PRESENT").length;
@@ -114,6 +132,17 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
                       <div className="text-xs text-slate-400">{present}/{total} buổi</div>
                     </td>
                     {showMoney && <td className="whitespace-nowrap px-4 py-2.5 text-right">{d > 0 ? <b className="text-rose-600">{money(d)}</b> : <span className="badge bg-green-50 text-green-700">Đã đủ</span>}</td>}
+                    {manage && (
+                      <td className="px-2 py-2.5 text-right">
+                        <RowMenu>
+                          <ModalButton variant="menu" label="Sửa hồ sơ" icon={<Pencil size={15} />} title={`Sửa hồ sơ ${s.fullName}`} subtitle={s.code} size="lg">
+                            <ActionForm action={updateStudent.bind(null, s.id)}><StudentFields grades={grades} s={s} withStatus /></ActionForm>
+                          </ModalButton>
+                          <ConfirmButton label="Xóa học viên" icon={<Trash2 size={15} />} title={`Xóa học viên ${s.fullName}?`}
+                            message="Chỉ xóa được học viên tạo nhầm (chưa điểm danh, chưa có học phí). Thao tác này không hoàn tác được." action={deleteStudent.bind(null, s.id)} />
+                        </RowMenu>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
@@ -121,7 +150,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
           </table>
         </div>
       </div>
-      <p className="mt-3 text-xs text-slate-400">Thêm học viên và ghi danh sẽ có ở giai đoạn 2. Bấm vào tên để xem hồ sơ.</p>
+      <p className="mt-3 text-xs text-slate-400">Bấm vào tên để xem hồ sơ. Học viên mới chưa ghi danh nằm ở mục “Chưa xếp lớp”.</p>
     </>
   );
 }

@@ -1,6 +1,12 @@
 import Link from "next/link";
 import clsx from "clsx";
-import { BookOpen, CalendarDays, GraduationCap, MapPin, User, Users } from "lucide-react";
+import { BookOpen, CalendarDays, Flag, GraduationCap, MapPin, Pencil, Plus, Trash2, User, Users } from "lucide-react";
+import { ActionForm, ConfirmButton, ModalButton, RowMenu } from "@/components/ui/modal";
+import { ClassFields, type ClassOptions } from "@/components/classes/forms";
+import { CourseFields } from "@/components/classes/course-fields";
+import { loadClassOptions } from "@/lib/classes/options";
+import { createClass, deleteClass, setClassStatus, updateClass } from "@/lib/actions/classes";
+import { createCourse, deleteCourse, updateCourse } from "@/lib/actions/courses";
 import { PageHeader } from "@/components/layout/app-shell";
 import { db } from "@/lib/db";
 import { guardPage } from "@/lib/auth/session";
@@ -20,19 +26,30 @@ export default async function ClassesPage({ searchParams }: { searchParams: Prom
   const showPrice = can(user.role, "tuition.view");
 
   const programs = await db.program.findMany({ orderBy: { order: "asc" } });
+  const manage = can(user.role, "class.manage");
+  const options = manage ? await loadClassOptions() : null;
 
   return (
     <>
       <PageHeader
         title="Lớp học"
         subtitle="Các lớp đang mở theo chương trình HSK, IELTS, TOEIC"
+        actions={options && (tab === "courses" ? (
+          <ModalButton variant="primary" label="Thêm khóa học" icon={<Plus size={16} />} title="Thêm khóa học vào bảng giá" size="lg">
+            <ActionForm action={createCourse}><CourseFields programs={programs} /></ActionForm>
+          </ModalButton>
+        ) : (
+          <ModalButton variant="primary" label="Tạo lớp" icon={<Plus size={16} />} title="Tạo lớp mới" subtitle="Hệ thống tự sinh các buổi học theo lịch" size="lg">
+            <ActionForm action={createClass} submitLabel="Tạo lớp"><ClassFields o={options} /></ActionForm>
+          </ModalButton>
+        ))}
       />
       <div className="mb-5 flex flex-wrap items-center gap-2">
         <TabLink href="/lop-hoc" active={tab === "classes"}>Danh sách lớp</TabLink>
         {showPrice && <TabLink href="/lop-hoc?tab=khoa-hoc" active={tab === "courses"}>Khóa học & học phí niêm yết</TabLink>}
       </div>
       {tab === "courses" && showPrice ? (
-        <CourseCatalog />
+        <CourseCatalog manage={manage} />
       ) : (
         <ClassList
           programs={programs}
@@ -40,6 +57,7 @@ export default async function ClassesPage({ searchParams }: { searchParams: Prom
           status={sp.tt === "ket-thuc" ? "ENDED" : "OPEN"}
           teacherId={user.role === "TEACHER" ? user.id : undefined}
           showPrice={showPrice}
+          options={options}
         />
       )}
     </>
@@ -55,9 +73,9 @@ function TabLink({ href, active, children }: { href: string; active: boolean; ch
   );
 }
 
-async function ClassList({ programs, program, status, teacherId, showPrice }: {
+async function ClassList({ programs, program, status, teacherId, showPrice, options }: {
   programs: { id: string; code: string; name: string; color: string }[];
-  program?: string; status: "OPEN" | "ENDED"; teacherId?: string; showPrice: boolean;
+  program?: string; status: "OPEN" | "ENDED"; teacherId?: string; showPrice: boolean; options: ClassOptions | null;
 }) {
   const today = todayVN();
   const classes = await db.class.findMany({
@@ -116,12 +134,27 @@ async function ClassList({ programs, program, status, teacherId, showPrice }: {
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white shadow-md" style={{ background: c.color }}>
                     <GraduationCap size={21} />
                   </span>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <h3 className="truncate text-[17px] font-bold leading-tight"><Link href={`/lop-hoc/${c.code}`} className="hover:underline">{c.name}</Link></h3>
                     <div className="mt-0.5 text-xs font-medium text-slate-500">
                       {c.course?.program.name} · {c.course?.target ?? c.course?.description ?? c.course?.level}
                     </div>
                   </div>
+                  {options && (
+                    <RowMenu>
+                      <ModalButton variant="menu" label="Sửa lớp" icon={<Pencil size={15} />} title={`Sửa lớp ${c.name}`} size="lg">
+                        <ActionForm action={updateClass.bind(null, c.id)}><ClassFields o={options} c={c} /></ActionForm>
+                      </ModalButton>
+                      {c.status === "OPEN" ? (
+                        <ConfirmButton variant="menu" label="Kết thúc lớp" icon={<Flag size={15} />} title="Kết thúc lớp?" confirmLabel="Kết thúc lớp"
+                          message="Lớp chuyển sang “Đã kết thúc”, học viên đang học chuyển thành đã nghỉ từ hôm nay." action={setClassStatus.bind(null, c.id, "ENDED")} />
+                      ) : (
+                        <ConfirmButton variant="menu" label="Mở lại lớp" icon={<Flag size={15} />} title="Mở lại lớp?" confirmLabel="Mở lại" message="Lớp sẽ hiện lại trong danh sách lớp đang mở." action={setClassStatus.bind(null, c.id, "OPEN")} />
+                      )}
+                      <ConfirmButton label="Xóa lớp" icon={<Trash2 size={15} />} title={`Xóa lớp ${c.name}?`}
+                        message="Chỉ xóa được lớp chưa điểm danh và chưa thu học phí (ví dụ tạo nhầm). Thao tác này không hoàn tác được." action={deleteClass.bind(null, c.id)} />
+                    </RowMenu>
+                  )}
                 </div>
                 <ul className="mt-4 space-y-1.5 text-[13px] text-slate-600">
                   <li className="flex items-start gap-2"><CalendarDays size={15} className="mt-0.5 shrink-0 text-violet-500" />{sched || "Chưa đặt lịch"}</li>
@@ -181,11 +214,12 @@ function Metric({ value, label, icon }: { value: React.ReactNode; label: string;
   );
 }
 
-async function CourseCatalog() {
+async function CourseCatalog({ manage }: { manage: boolean }) {
   const programs = await db.program.findMany({
     orderBy: { order: "asc" },
     include: { courses: { where: { active: true }, orderBy: { order: "asc" } } },
   });
+  const allPrograms = programs.map(({ id, name }) => ({ id, name }));
   const range = (a?: number | null, b?: number | null) => (a && b && a !== b ? `${a}–${b}` : a ?? b ?? "");
   return (
     <div className="space-y-6">
@@ -206,7 +240,7 @@ async function CourseCatalog() {
                 <tr>
                   <th className="px-5 py-3">Mã lớp</th><th className="px-3 py-3">Lộ trình / mục tiêu</th>
                   <th className="px-3 py-3">Thời gian</th><th className="px-3 py-3 text-right">Học phí niêm yết</th>
-                  <th className="px-3 py-3">Sĩ số</th><th className="px-5 py-3">Giáo trình</th>
+                  <th className="px-3 py-3">Sĩ số</th><th className="px-5 py-3">Giáo trình</th>{manage && <th className="w-12" />}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -228,6 +262,17 @@ async function CourseCatalog() {
                     </td>
                     <td className="px-3 py-3 text-slate-600">{range(c.classSizeMin, c.classSizeMax)} HV</td>
                     <td className="px-5 py-3 text-slate-600">{c.coursebook ?? "—"}</td>
+                    {manage && (
+                      <td className="px-3 py-3 text-right">
+                        <RowMenu>
+                          <ModalButton variant="menu" label="Sửa khóa học" icon={<Pencil size={15} />} title={`Sửa khóa ${c.name}`} size="lg">
+                            <ActionForm action={updateCourse.bind(null, c.id)}><CourseFields programs={allPrograms} c={c} /></ActionForm>
+                          </ModalButton>
+                          <ConfirmButton label="Xóa khóa học" icon={<Trash2 size={15} />} title={`Xóa khóa ${c.name}?`}
+                            message="Nếu đã có lớp dùng khóa này, khóa chỉ bị ẩn khỏi bảng giá, các lớp cũ giữ nguyên." action={deleteCourse.bind(null, c.id)} />
+                        </RowMenu>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

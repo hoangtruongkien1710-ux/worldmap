@@ -8,6 +8,7 @@ import { can } from "@/lib/auth/permissions";
 import { fmtDate, todayVN, WEEKDAY_SHORT } from "@/lib/dates";
 import { money } from "@/lib/money";
 import { classTuition } from "@/lib/tuition/summary";
+import { loadClassOptions } from "@/lib/classes/options";
 import { ActionForm, ConfirmButton, ModalButton, RowMenu } from "@/components/ui/modal";
 import { ClassFields } from "@/components/classes/forms";
 import { AddSessionForm } from "@/components/classes/session-forms";
@@ -46,12 +47,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
   const tuition = money_ ? await classTuition(c.id, today) : [];
   const debtors = tuition.filter((t) => t.remain > 0).length;
 
-  const options = manage ? await Promise.all([
-    db.course.findMany({ where: { active: true }, include: { program: true }, orderBy: [{ program: { order: "asc" } }, { order: "asc" }] }),
-    db.user.findMany({ where: { role: "TEACHER", active: true }, orderBy: { fullName: "asc" } }),
-    db.room.findMany({ orderBy: { name: "asc" } }),
-    db.grade.findMany({ orderBy: { order: "asc" } }),
-  ]).then(([courses, teachers, rooms, grades]) => ({ courses, teachers, rooms, grades })) : null;
+  const options = manage ? await loadClassOptions() : null;
 
   const sched = c.schedules.map((s) => `${WEEKDAY_SHORT[s.weekday]} ${s.startTime}–${s.endTime}`).join(" · ");
   const href = (t: string) => `/lop-hoc/${c.code}${t ? `?tab=${t}` : ""}`;
