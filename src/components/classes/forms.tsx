@@ -82,7 +82,7 @@ export function ClassFields({ o, c }: { o: ClassOptions; c?: ClassValue }) {
   );
 }
 
-type StudentValue = { fullName: string; gradeId: number | null; school: string | null; parentName: string | null; parentRelation: string | null; parentPhone: string | null; note: string | null; status?: string };
+type StudentValue = { fullName: string; gradeId: number | null; school: string | null; phone?: string | null; parentName: string | null; parentRelation: string | null; parentPhone: string | null; note: string | null; status?: string };
 
 export function StudentFields({ grades, s, withStatus }: { grades: { id: number; name: string }[]; s?: StudentValue; withStatus?: boolean }) {
   return (
@@ -96,7 +96,10 @@ export function StudentFields({ grades, s, withStatus }: { grades: { id: number;
           </select>
         </Field>
       </Grid>
-      <Field label="Trường / nơi làm việc"><input name="school" defaultValue={s?.school ?? ""} className="input" /></Field>
+      <Grid>
+        <Field label="Trường / nơi làm việc"><input name="school" defaultValue={s?.school ?? ""} className="input" /></Field>
+        <Field label="SĐT học viên" hint="Số của chính học viên (nếu có)"><input name="phone" defaultValue={s?.phone ?? ""} inputMode="tel" className="input" placeholder="09…" /></Field>
+      </Grid>
       <Grid cols={3}>
         <Field label="Phụ huynh / người liên hệ"><input name="parentName" defaultValue={s?.parentName ?? ""} className="input" placeholder="VD: Chị Lan" /></Field>
         <Field label="Quan hệ">
@@ -104,7 +107,7 @@ export function StudentFields({ grades, s, withStatus }: { grades: { id: number;
             <option value="">—</option><option value="mẹ">Mẹ</option><option value="bố">Bố</option><option value="khác">Khác</option>
           </select>
         </Field>
-        <Field label="Số điện thoại"><input name="parentPhone" defaultValue={s?.parentPhone ?? ""} inputMode="tel" className="input" placeholder="09…" /></Field>
+        <Field label="SĐT phụ huynh"><input name="parentPhone" defaultValue={s?.parentPhone ?? ""} inputMode="tel" className="input" placeholder="09…" /></Field>
       </Grid>
       <Field label="Ghi chú"><textarea name="note" defaultValue={s?.note ?? ""} rows={2} className="input" /></Field>
       {withStatus && (

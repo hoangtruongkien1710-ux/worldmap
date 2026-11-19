@@ -75,7 +75,7 @@ export default async function Page({ params }: { params: Promise<{ code: string 
         <div className="card p-4">
           <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-500"><Phone size={15} /> Liên hệ</div>
           <div className="font-semibold">{s.parentName ? `${s.parentName} (${s.parentRelation})` : "Học viên tự liên hệ"}</div>
-          <div className="text-sm text-slate-600">{s.parentPhone}</div>
+          <div className="mt-1 space-y-0.5 text-sm text-slate-600">{s.parentPhone && <div>Phụ huynh: <a href={`tel:${s.parentPhone}`} className="font-semibold text-brand-600 hover:underline">{s.parentPhone}</a></div>}{s.phone && <div>Học viên: <a href={`tel:${s.phone}`} className="font-semibold text-brand-600 hover:underline">{s.phone}</a></div>}</div>
         </div>
         <div className="card p-4">
           <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-500"><CalendarCheck size={15} /> Chuyên cần</div>

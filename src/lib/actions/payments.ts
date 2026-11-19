@@ -35,3 +35,10 @@ export async function cancelPayment(paymentId: string, _: ActionResult) {
     return "Đã hủy lần thu và phiếu thu tương ứng.";
   }, PATHS);
 }
+
+/** Thu từ phiếu gộp: chọn lớp (ghi danh) ngay trong form. */
+export async function collectFromSheet(_: ActionResult, f: FormData) {
+  const enrollmentId = str(f, "enrollmentId");
+  if (!enrollmentId) return { ok: false, error: "Chọn lớp cần thu.", at: Date.now() };
+  return collectPayment(enrollmentId, _, f);
+}

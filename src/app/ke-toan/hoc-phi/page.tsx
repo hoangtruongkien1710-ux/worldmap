@@ -53,7 +53,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ t
             <tbody className="divide-y divide-slate-100">
               {shown.map((r) => (
                 <tr key={r.id} className="align-top hover:bg-slate-50/60">
-                  <td className="px-4 py-3"><div className="font-semibold">{r.student.fullName}</div><div className="text-xs text-slate-500">{r.student.code} · {r.student.parentPhone ?? ""}</div></td>
+                  <td className="px-4 py-3"><div className="font-semibold">{r.student.fullName}</div><div className="text-xs text-slate-500">{r.student.code} · {r.student.parentPhone ?? r.student.phone ?? ""}</div></td>
                   <td className="px-3 py-3">{r.items.map((it, k) => (
                     <div key={k}>{it.className}{it.discount > 0 && <span className="ml-1 text-xs text-emerald-700">(giảm {money(it.discount)})</span>}</div>
                   ))}</td>

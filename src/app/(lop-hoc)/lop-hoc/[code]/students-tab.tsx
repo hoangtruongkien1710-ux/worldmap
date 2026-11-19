@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Phones } from "@/components/students/phones";
 import clsx from "clsx";
 import { Pencil, Search, UserMinus, UserPlus, UserRoundPen, Plus, Trash2 } from "lucide-react";
 import { db } from "@/lib/db";
@@ -35,7 +36,7 @@ export async function StudentsTab({ cls, sp, manage, canStudent, showMoney, tuit
   ]);
   const filter = sp.loc === "nghi" ? "LEFT" : sp.loc === "tat-ca" ? "ALL" : "ACTIVE";
   const q = sp.q?.trim().toLowerCase();
-  const rows = enrollments.filter((e) => (filter === "ALL" || e.status === filter) && (!q || e.student.fullName.toLowerCase().includes(q) || e.student.code.toLowerCase().includes(q) || e.student.parentPhone?.includes(q)));
+  const rows = enrollments.filter((e) => (filter === "ALL" || e.status === filter) && (!q || e.student.fullName.toLowerCase().includes(q) || e.student.code.toLowerCase().includes(q) || e.student.parentPhone?.includes(q) || e.student.phone?.includes(q)));
   const count = (st: string) => enrollments.filter((e) => st === "ALL" || e.status === st).length;
   const rate = (sid: string) => {
     const a = attendance.filter((x) => x.studentId === sid);
@@ -87,7 +88,7 @@ export async function StudentsTab({ cls, sp, manage, canStudent, showMoney, tuit
                   <label key={s.id} className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-slate-50">
                     <input type="checkbox" name="studentIds" value={s.id} className="h-4 w-4 accent-brand-500" />
                     <Avatar name={s.fullName} />
-                    <span className="flex-1"><b>{s.fullName}</b><span className="block text-xs text-slate-500">{s.code} · {s.grade?.name ?? ""} · {s.parentPhone ?? ""}</span></span>
+                    <span className="flex-1"><b>{s.fullName}</b><span className="block text-xs text-slate-500">{s.code} · {s.grade?.name ?? ""} · {s.phone ?? s.parentPhone ?? ""}</span></span>
                   </label>
                 ))}
               </div>
@@ -124,7 +125,7 @@ export async function StudentsTab({ cls, sp, manage, canStudent, showMoney, tuit
                       <div><Link href={`/hoc-sinh/${s.code}`} className="font-semibold hover:underline">{s.fullName}</Link><div className="text-xs text-slate-500">{s.code} · {s.grade?.name ?? "—"}</div></div>
                     </div>
                   </td>
-                  <td className="px-3 py-2.5"><div>{s.parentName ? `${s.parentName}${s.parentRelation ? ` (${s.parentRelation})` : ""}` : <span className="text-slate-400">Tự liên hệ</span>}</div><div className="text-xs text-slate-500">{s.parentPhone}</div></td>
+                  <td className="px-3 py-2.5"><div>{s.parentName ? `${s.parentName}${s.parentRelation ? ` (${s.parentRelation})` : ""}` : <span className="text-slate-400">Tự liên hệ</span>}</div><Phones s={s} /></td>
                   <td className="whitespace-nowrap px-3 py-2.5">{fmtDate(e.joinDate)}</td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-slate-500">{e.leaveDate ? fmtDate(e.leaveDate) : "—"}</td>
                   <td className="px-3 py-2.5 text-right">{e.percentDiscount ? `${e.percentDiscount}%` : "—"}</td>

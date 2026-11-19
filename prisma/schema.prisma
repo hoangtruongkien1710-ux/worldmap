@@ -237,6 +237,7 @@ model Student {
   gradeId        Int?
   grade          Grade?        @relation(fields: [gradeId], references: [id])
   school         String?
+  phone          String? // số điện thoại của chính học viên
   parentName     String?
   parentRelation String?
   parentPhone    String?

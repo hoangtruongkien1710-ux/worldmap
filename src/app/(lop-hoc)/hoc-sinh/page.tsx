@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Phones } from "@/components/students/phones";
 import clsx from "clsx";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { FilterForm, FilterSelect } from "@/components/classes/filter-form";
@@ -60,7 +61,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
     where: {
       ...(unassigned ? { enrollments: { none: {} } } : { enrollments: { some: en } }),
       ...(grade ? { gradeId: grade.id } : {}),
-      ...(q ? { OR: [{ fullName: { contains: q, mode: "insensitive" } }, { code: { contains: q, mode: "insensitive" } }, { parentPhone: { contains: q } }, { parentName: { contains: q, mode: "insensitive" } }] } : {}),
+      ...(q ? { OR: [{ fullName: { contains: q, mode: "insensitive" } }, { code: { contains: q, mode: "insensitive" } }, { parentPhone: { contains: q } }, { phone: { contains: q } }, { parentName: { contains: q, mode: "insensitive" } }] } : {}),
     },
     include: {
       grade: true,
@@ -187,7 +188,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
                       <div className="text-xs text-slate-500">{s.code}{s.school ? ` · ${s.school}` : ""}</div>
                     </td>
                     <td className="px-3 py-2.5 text-slate-600">{s.grade?.name ?? "—"}</td>
-                    <td className="px-3 py-2.5"><div>{s.parentName ?? <span className="text-slate-400">Tự liên hệ</span>}{s.parentRelation ? <span className="text-xs text-slate-500"> ({s.parentRelation})</span> : null}</div><div className="text-xs text-slate-500">{s.parentPhone}</div></td>
+                    <td className="px-3 py-2.5"><div>{s.parentName ?? <span className="text-slate-400">Tự liên hệ</span>}{s.parentRelation ? <span className="text-xs text-slate-500"> ({s.parentRelation})</span> : null}</div><Phones s={s} /></td>
                     <td className="px-3 py-2.5">
                       <div className="flex flex-wrap gap-1">
                         {ens.map((e) => (

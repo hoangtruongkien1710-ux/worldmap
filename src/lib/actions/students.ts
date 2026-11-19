@@ -11,7 +11,8 @@ const PATHS = ["/hoc-sinh", "/lop-hoc", "/hoc-phi", "/cong-no", "/"];
 
 function readStudent(f: FormData) {
   const parentPhone = opt(f, "parentPhone");
-  if (parentPhone && !/^0\d{9,10}$/.test(parentPhone.replace(/\s/g, ""))) throw new UserError("Số điện thoại phải có 10–11 chữ số, bắt đầu bằng 0.");
+  const phone = opt(f, "phone");
+  for (const v of [parentPhone, phone]) if (v && !/^0\d{9,10}$/.test(v.replace(/\s/g, ""))) throw new UserError("Số điện thoại phải có 10–11 chữ số, bắt đầu bằng 0.");
   return {
     fullName: req(f, "fullName", "họ tên"),
     gradeId: int(f, "gradeId"),
@@ -19,6 +20,7 @@ function readStudent(f: FormData) {
     parentName: opt(f, "parentName"),
     parentRelation: opt(f, "parentRelation"),
     parentPhone: parentPhone?.replace(/\s/g, "") ?? null,
+    phone: phone?.replace(/\s/g, "") ?? null,
     note: opt(f, "note"),
   };
 }

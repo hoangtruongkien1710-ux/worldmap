@@ -289,7 +289,8 @@ async function main() {
           school: pick(schools[audience]),
           parentName: parent,
           parentRelation: parent ? (parent.startsWith("Chị") ? "mẹ" : "bố") : null,
-          parentPhone: `09${String(Math.floor(10_000_000 + rand() * 89_999_999))}`,
+          phone: !minor || rand() < (audience === "THPT" ? 0.8 : 0.4) ? `0${pick(["9", "8", "3", "7"])}${String(Math.floor(10_000_000 + rand() * 89_999_999))}` : null,
+          parentPhone: minor ? `09${String(Math.floor(10_000_000 + rand() * 89_999_999))}` : null,
         },
       });
     };
@@ -356,6 +357,20 @@ async function main() {
       const [taughtContent, homework] = lesson(i + 1);
       await db.session.update({ where: { id: s.id }, data: { taughtContent, homework } });
     }
+  }
+
+  // ---- Số điện thoại riêng của học viên (bổ sung cho dữ liệu cũ, chạy một lần) ----
+  if (!(await db.setting.findUnique({ where: { key: "seed.studentPhones" } }))) {
+    const list = await db.student.findMany({ where: { phone: null }, include: { grade: true }, orderBy: { code: "asc" } });
+    for (const st of list) {
+      const minor = !!st.parentName;
+      const own = !minor || rand() < (st.grade?.name === "THPT" ? 0.8 : 0.4);
+      if (!own) continue;
+      // Người lớn trước đây ghi số của mình vào ô phụ huynh: chuyển sang ô học viên.
+      const phone = !minor && st.parentPhone ? st.parentPhone : `0${pick(["9", "8", "3", "7"])}${String(Math.floor(10_000_000 + rand() * 89_999_999))}`;
+      await db.student.update({ where: { id: st.id }, data: { phone, ...(!minor ? { parentPhone: null } : {}) } });
+    }
+    await db.setting.create({ data: { key: "seed.studentPhones", value: true } });
   }
 
   // ---- Kế toán: quỹ, ngân hàng, học phí, chi phí, lương, bút toán ----

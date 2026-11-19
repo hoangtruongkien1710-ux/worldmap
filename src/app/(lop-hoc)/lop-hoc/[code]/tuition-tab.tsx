@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Phones } from "@/components/students/phones";
 import clsx from "clsx";
 import { randomUUID } from "node:crypto";
 import { Banknote, CircleAlert, CircleCheck, History, Lock, Phone, Search, XCircle } from "lucide-react";
@@ -96,7 +97,7 @@ export async function TuitionTab({ cls, rows: all, sp, debtOnly, canCollect }: {
                     {debtOnly ? (
                       <td className="px-3 py-2.5">
                         <div>{s.parentName ?? "Học viên"}</div>
-                        {s.parentPhone && <a href={`tel:${s.parentPhone}`} className="inline-flex items-center gap-1 text-xs text-brand-600 hover:underline"><Phone size={12} />{s.parentPhone}</a>}
+                        <Phones s={s} />
                         {lastPay && <div className="text-xs text-slate-400">Đóng gần nhất {fmtDate(lastPay.paidAt)}</div>}
                       </td>
                     ) : (
