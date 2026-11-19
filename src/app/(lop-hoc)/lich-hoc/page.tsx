@@ -70,12 +70,16 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ t
                   const cancelled = s.status === "CANCELLED";
                   const marked = s._count.attendance > 0;
                   return (
-                    <div key={s.id} className={clsx("rounded-lg p-2 text-xs", cancelled && "opacity-50")} style={{ background: `${s.class.color}14`, borderLeft: `3px solid ${s.class.color}` }}>
-                      <div className="font-bold text-slate-800">{s.startTime}–{s.endTime}</div>
-                      <div className={clsx("font-semibold leading-snug", cancelled && "line-through")} style={{ color: s.class.color }}>{s.class.name}</div>
+                    <div key={s.id} className={clsx("rounded-lg p-2 text-xs", cancelled && "opacity-60")} style={{ background: `${s.class.color}14`, borderLeft: `3px solid ${s.class.color}` }}>
+                      <div className="flex items-center justify-between gap-1 font-bold text-slate-800">{s.startTime}–{s.endTime}
+                        {s.source === "MAKEUP" && <span className="rounded bg-violet-600 px-1 text-[10px] font-semibold text-white">Học bù</span>}
+                        {s.source === "MANUAL" && <span className="rounded bg-sky-600 px-1 text-[10px] font-semibold text-white">Buổi thêm</span>}
+                      </div>
+                      <Link href={`/lop-hoc/${s.class.code}`} className={clsx("block font-semibold leading-snug hover:underline", cancelled && "line-through")} style={{ color: s.class.color }}>{s.class.name}</Link>
+                      {s.source === "MANUAL" && s.taughtContent && <div className="text-slate-600">{s.taughtContent}</div>}
                       <div className="mt-0.5 flex items-center gap-1 text-slate-500"><MapPin size={11} />{s.class.room?.name ?? "—"} · {s.class._count.enrollments} HV</div>
                       <div className="flex items-center gap-1 text-slate-500"><User size={11} />{s.class.teacher?.fullName ?? "—"}</div>
-                      {cancelled ? <span className="mt-1 inline-block font-semibold text-slate-500">Nghỉ</span>
+                      {cancelled ? <div className="mt-1 text-slate-600"><b>Nghỉ</b>{s.cancelReason ? ` · ${s.cancelReason}` : ""}</div>
                         : d < today ? <span className={clsx("mt-1 inline-block font-semibold", marked ? "text-green-700" : "text-amber-600")}>{marked ? "Đã điểm danh" : "Chưa điểm danh"}</span> : null}
                     </div>
                   );

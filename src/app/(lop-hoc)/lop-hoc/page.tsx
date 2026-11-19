@@ -117,7 +117,7 @@ async function ClassList({ programs, program, status, teacherId, showPrice }: {
                     <GraduationCap size={21} />
                   </span>
                   <div className="min-w-0">
-                    <h3 className="truncate text-[17px] font-bold leading-tight">{c.name}</h3>
+                    <h3 className="truncate text-[17px] font-bold leading-tight"><Link href={`/lop-hoc/${c.code}`} className="hover:underline">{c.name}</Link></h3>
                     <div className="mt-0.5 text-xs font-medium text-slate-500">
                       {c.course?.program.name} · {c.course?.target ?? c.course?.description ?? c.course?.level}
                     </div>

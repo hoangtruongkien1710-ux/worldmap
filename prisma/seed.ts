@@ -111,15 +111,19 @@ async function main() {
   const branch = await db.branch.upsert({
     where: { code: "WM01" },
     update: {},
-    create: { code: "WM01", name: "WorldMap EDU – Cơ sở 1", phone: "0900 000 000", address: "(cập nhật địa chỉ)" },
+    create: { code: "WM01", name: "WorldMap EDU – Cơ sở 1", phone: "0900 000 000", address: "Số 18 Lê Lợi, TP. Bắc Giang (địa chỉ mẫu)" },
   });
+
+  if (branch.address === "(cập nhật địa chỉ)") await db.branch.update({ where: { id: branch.id }, data: { address: "Số 18 Lê Lợi, TP. Bắc Giang (địa chỉ mẫu)" } });
 
   const settings: Record<string, unknown> = {
     "center.sidebarTitle": "WORLDMAP EDU",
     "center.name": "WorldMap EDU",
     "center.tagline": "Từng bước chinh phục",
     "center.phone": "0900 000 000",
-    "center.address": "",
+    "center.address": "Số 18 Lê Lợi, TP. Bắc Giang (địa chỉ mẫu)",
+    "center.email": "lienhe@worldmap.example",
+    "center.hours": "T2–CN: 8:00–21:30",
     "center.logoUrl": "/logo.png",
     "center.thankYou": "Cảm ơn quý phụ huynh và học viên đã tin tưởng đồng hành cùng WorldMap EDU!",
     "bank.bin": "970436",
@@ -175,11 +179,13 @@ async function main() {
     { username: "gv.huy", fullName: "Lê Quang Huy", role: "TEACHER" as const },
   ];
   const userIds: Record<string, string> = {};
-  for (const u of users) {
+  for (const [i, u] of users.entries()) {
+    const phone = `09${String(12_345_670 + i * 1_111_111).slice(0, 8)}`; // số giả
+    const prev = await db.user.findUnique({ where: { username: u.username } });
     const row = await db.user.upsert({
       where: { username: u.username },
-      update: { fullName: u.fullName, role: u.role },
-      create: { ...u, passwordHash: hash, branchId: branch.id, phone: "09xxxxxxxx" },
+      update: { fullName: u.fullName, role: u.role, ...(!prev?.phone || prev.phone === "09xxxxxxxx" ? { phone } : {}) },
+      create: { ...u, passwordHash: hash, branchId: branch.id, phone },
     });
     userIds[u.username] = row.id;
   }
@@ -230,11 +236,31 @@ async function main() {
     await syncClassSessions(db, row.id, { from: c.start, to: syncTo });
   }
 
-  // Một buổi nghỉ lễ / giáo viên ốm làm ví dụ
-  await db.session.updateMany({
-    where: { classId: classIds["HSK1-2611"], date: toDate("2026-11-12") },
-    data: { status: "CANCELLED", cancelReason: "Giáo viên ốm – sẽ học bù" },
-  });
+  // ---- Lịch học: nghỉ lễ, giáo viên ốm, học bù, buổi thi thử ----
+  const cancel = async (where: object, reason: string) => {
+    const w = { ...where, status: "SCHEDULED" as const, source: "SCHEDULE" as const, cancelReason: null };
+    await db.attendance.deleteMany({ where: { session: w } }); // buổi nghỉ thì không có điểm danh
+    await db.session.updateMany({ where: w, data: { status: "CANCELLED", cancelReason: reason } });
+  };
+  await cancel({ date: { in: [toDate("2026-09-01"), toDate("2026-09-02")] } }, "Lễ Quốc khánh 2/9");
+  await cancel({ classId: classIds["HSK2-2609"], date: toDate("2026-10-10") }, "Sinh viên thi giữa kỳ – đã xếp học bù");
+  await cancel({ date: toDate("2026-11-20"), startTime: { gte: "17:00" } }, "Ngày Nhà giáo Việt Nam 20/11");
+  await cancel({ classId: classIds["HSK1-2611"], date: toDate("2026-11-12") }, "Giáo viên ốm – sẽ học bù");
+  await cancel({ classId: classIds["IM1-2609"], date: toDate("2026-10-14") }, "Phòng P.201 sửa điều hòa – đã xếp học bù");
+  const extra = [
+    { cls: "HSK1-2611", date: "2026-11-14", startTime: "18:00", endTime: "19:30", source: "MAKEUP" as const, taughtContent: "Học bù buổi 12/11" },
+    { cls: "IM1-2609", date: "2026-10-17", startTime: "09:00", endTime: "10:30", source: "MAKEUP" as const, taughtContent: "Học bù buổi 14/10" },
+    { cls: "HSK2-2609", date: "2026-10-13", startTime: "18:00", endTime: "19:30", source: "MAKEUP" as const, taughtContent: "Học bù buổi 10/10" },
+    { cls: "PRET-2609", date: "2026-11-21", startTime: "14:00", endTime: "16:00", source: "MANUAL" as const, taughtContent: "Thi thử TOEIC giữa khóa (Listening + Reading)" },
+    { cls: "IM2-2610", date: "2026-11-25", startTime: "18:00", endTime: "20:00", source: "MANUAL" as const, taughtContent: "Mock test IELTS: Writing Task 1, 2" },
+  ];
+  for (const e of extra) {
+    await db.session.upsert({
+      where: { classId_date_startTime: { classId: classIds[e.cls], date: toDate(e.date), startTime: e.startTime } },
+      update: {},
+      create: { classId: classIds[e.cls], date: toDate(e.date), startTime: e.startTime, endTime: e.endTime, source: e.source, taughtContent: e.taughtContent },
+    });
+  }
 
   // ---- Học viên ----
   if ((await db.student.count({ where: { code: { startsWith: "HV" } } })) === 0) {
@@ -312,6 +338,23 @@ async function main() {
         return { sessionId: s.id, studentId: e.studentId, status, updatedById: s.class.teacherId };
       });
     if (rows.length) await db.attendance.createMany({ data: rows, skipDuplicates: true });
+  }
+
+  // ---- Nội dung đã dạy, bài tập về nhà cho các buổi đã học ----
+  const LESSON: Record<string, (n: number) => [string, string]> = {
+    HSK: (n) => [`Bài ${n}: từ vựng, ngữ pháp và luyện nói theo giáo trình`, `Viết chữ Hán bài ${n}, nghe lại audio 2 lần`],
+    IELTS: (n) => [`Unit ${Math.ceil(n / 2)} – ${n % 2 ? "Reading & Vocabulary" : "Listening & Speaking"}`, n % 2 ? "Workbook Reading + 20 từ mới" : "Ghi âm Speaking Part 2 (2 phút)"],
+    TOEIC: (n) => [`Buổi ${n}: ${["Part 1–2 Photographs & Q-R", "Part 3–4 Conversations", "Part 5–6 Grammar", "Part 7 Reading"][n % 4]}`, "Làm 50 câu bài tập trên app"],
+  };
+  for (const id of Object.values(classIds)) {
+    const cls = await db.class.findUniqueOrThrow({ where: { id }, include: { course: { include: { program: true } } } });
+    const lesson = LESSON[cls.course?.program.code ?? "IELTS"];
+    const past = await db.session.findMany({ where: { classId: id, status: "SCHEDULED", source: "SCHEDULE", date: { lt: toDate(today) } }, orderBy: { date: "asc" } });
+    for (const [i, s] of past.entries()) {
+      if (s.taughtContent) continue;
+      const [taughtContent, homework] = lesson(i + 1);
+      await db.session.update({ where: { id: s.id }, data: { taughtContent, homework } });
+    }
   }
 
   // ---- Kế toán: quỹ, ngân hàng, học phí, chi phí, lương, bút toán ----
