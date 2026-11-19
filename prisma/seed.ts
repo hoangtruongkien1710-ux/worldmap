@@ -247,11 +247,12 @@ async function main() {
       "Sinh viên": ["ĐH Ngoại thương", "ĐH Bách khoa Hà Nội", "ĐH Kinh tế Quốc dân", "Học viện Ngân hàng"],
       "Người đi làm": ["Công ty TNHH ABC", "Ngân hàng (nhân viên)", "Kế toán tự do", "Công ty xuất nhập khẩu"],
     };
-    const parentNames = ["Anh Hùng", "Chị Mai", "Chị Lan", "Anh Dũng", "Chị Hà", "Anh Hương", "Chị Tuấn", "Chị Sơn"];
+    const parentNames = ["Anh Hùng", "Chị Mai", "Chị Lan", "Anh Dũng", "Chị Hà", "Chị Hương", "Anh Tuấn", "Anh Sơn"];
     let n = 0;
     const newStudent = async (audience: string, fullName?: string) => {
       n++;
       const minor = audience === "THCS" || audience === "THPT";
+      const parent = minor ? pick(parentNames) : null;
       return db.student.create({
         data: {
           code: `HV${String(n).padStart(4, "0")}`,
@@ -259,8 +260,8 @@ async function main() {
           branchId: branch.id,
           gradeId: await gradeOf(audience),
           school: pick(schools[audience]),
-          parentName: minor ? pick(parentNames) : null,
-          parentRelation: minor ? (rand() < 0.6 ? "mẹ" : "bố") : null,
+          parentName: parent,
+          parentRelation: parent ? (parent.startsWith("Chị") ? "mẹ" : "bố") : null,
           parentPhone: `09${String(Math.floor(10_000_000 + rand() * 89_999_999))}`,
         },
       });

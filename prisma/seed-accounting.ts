@@ -174,7 +174,7 @@ export async function seedAccounting(db: PrismaClient, rand: () => number, today
     const r = rand();
     const plan: { day: string; amount: number }[] = [];
     const firstDay = addDays(day, Math.floor(rand() * 6));
-    if (c.feeMode === "PER_SESSION" || r < 0.6) plan.push({ day: firstDay, amount });
+    if (c.feeMode === "PER_SESSION" || start < START || r < 0.6) plan.push({ day: firstDay, amount });
     else if (r < 0.85) {
       const half = roundTo(amount / 2, 100_000);
       plan.push({ day: firstDay, amount: half }, { day: addDays(firstDay, 30), amount: amount - half });
