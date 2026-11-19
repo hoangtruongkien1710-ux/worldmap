@@ -328,6 +328,7 @@ model Payment {
   id             String        @id @default(cuid())
   invoiceId      String
   invoice        Invoice       @relation(fields: [invoiceId], references: [id])
+  classId        String? // lớp được thu (một phiếu có thể gộp nhiều lớp)
   amount         Int
   method         PaymentMethod
   txnRef         String?
@@ -339,6 +340,7 @@ model Payment {
   createdAt      DateTime      @default(now())
 
   @@index([paidAt])
+  @@index([classId])
 }
 
 model Adjustment {

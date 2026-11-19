@@ -34,3 +34,31 @@ export function byClass(invoices: InvoiceRow[]) {
   }
   return map;
 }
+
+/** Học phí từng học viên trong một lớp: phải thu, đã thu (từng lần), còn lại. */
+export async function classTuition(classId: string, today: string) {
+  const { enrollmentDue } = await import("./service");
+  const cls = await db.class.findUniqueOrThrow({ where: { id: classId }, include: { sessions: { where: { status: "SCHEDULED" }, select: { date: true } } } });
+  const enrollments = await db.enrollment.findMany({ where: { classId }, include: { student: { include: { grade: true } } }, orderBy: { student: { fullName: "asc" } } });
+  const invoices = await db.invoice.findMany({
+    where: { studentId: { in: enrollments.map((e) => e.studentId) } },
+    include: { payments: { orderBy: { paidAt: "asc" } } },
+  });
+  return enrollments.map((e) => {
+    const mine = invoices.filter((i) => i.studentId === e.studentId);
+    const inv = mine.find((i) => ((i.lockedDetail ?? []) as InvoiceItem[]).some((it) => it.classId === classId));
+    const item = inv ? ((inv.lockedDetail ?? []) as InvoiceItem[]).find((it) => it.classId === classId)! : null;
+    const held = cls.sessions.filter((s) => s.date >= e.joinDate && s.date.toISOString().slice(0, 10) <= today && (!e.leaveDate || s.date <= e.leaveDate)).length;
+    const calc = enrollmentDue(cls, e.percentDiscount, held);
+    const due = item ? item.amount : calc.amount;
+    const share = inv && item && (inv.lockedAmount ?? 0) > 0 ? item.amount / (inv.lockedAmount ?? 1) : 0;
+    // Lần thu ghi rõ lớp; lần thu cũ (chưa ghi lớp) thì chia theo tỷ lệ phải thu.
+    const payments = mine.flatMap((i) => i.payments.filter((p) => p.classId === classId || (!p.classId && i.id === inv?.id)));
+    const active = payments.filter((p) => !p.voidedAt);
+    const paid = active.reduce((s, p) => s + (p.classId === classId ? p.amount : Math.round(p.amount * share)), 0);
+    return {
+      enrollment: e, student: e.student, locked: !!item, gross: item?.gross ?? calc.gross, discount: item?.discount ?? calc.discount,
+      due, paid, remain: Math.max(0, due - paid), payments, held,
+    };
+  });
+}

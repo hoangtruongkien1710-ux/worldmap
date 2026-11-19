@@ -1,128 +1,132 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import clsx from "clsx";
-import { ArrowLeft, BookOpen, CalendarDays, MapPin, User, Users } from "lucide-react";
-import { PageHeader } from "@/components/layout/app-shell";
+import { ArrowLeft, CalendarDays, CalendarPlus, ClipboardCheck, Flag, HandCoins, MapPin, Pencil, Presentation, Receipt, Trash2, User, Users } from "lucide-react";
 import { db } from "@/lib/db";
 import { guardPage } from "@/lib/auth/session";
 import { can } from "@/lib/auth/permissions";
-import { fmtDate, todayVN, toDay, WEEKDAY_LONG, WEEKDAY_SHORT, weekday } from "@/lib/dates";
+import { fmtDate, todayVN, WEEKDAY_SHORT } from "@/lib/dates";
 import { money } from "@/lib/money";
+import { classTuition } from "@/lib/tuition/summary";
+import { ActionForm, ConfirmButton, ModalButton, RowMenu } from "@/components/ui/modal";
+import { ClassFields } from "@/components/classes/forms";
+import { AddSessionForm } from "@/components/classes/session-forms";
+import { StudentsTab } from "./students-tab";
+import { AttendanceTab } from "./attendance-tab";
+import { TuitionTab } from "./tuition-tab";
+import { deleteClass, setClassStatus, updateClass } from "@/lib/actions/classes";
 
 export const dynamic = "force-dynamic";
 
-const SOURCE: Record<string, { label: string; cls: string }> = {
-  MAKEUP: { label: "Học bù", cls: "bg-violet-50 text-violet-700" },
-  MANUAL: { label: "Buổi thêm", cls: "bg-sky-50 text-sky-700" },
-};
+type SP = { tab?: string; thang?: string; q?: string; loc?: string };
 
-export default async function Page({ params }: { params: Promise<{ code: string }> }) {
+export async function generateMetadata({ params }: { params: Promise<{ code: string }> }) {
+  return { title: decodeURIComponent((await params).code) };
+}
+
+export default async function Page({ params, searchParams }: { params: Promise<{ code: string }>; searchParams: Promise<SP> }) {
   const user = await guardPage("class.view");
   const { code } = await params;
+  const sp = await searchParams;
   const c = await db.class.findUnique({
     where: { code: decodeURIComponent(code) },
     include: {
       course: { include: { program: true } }, teacher: true, room: true, grade: true,
-      schedules: { orderBy: [{ validFrom: "asc" }, { weekday: "asc" }] },
-      enrollments: { include: { student: true }, orderBy: { student: { fullName: "asc" } } },
-      sessions: { include: { _count: { select: { attendance: true } }, attendance: { select: { status: true } } }, orderBy: [{ date: "asc" }, { startTime: "asc" }] },
+      schedules: { where: { validTo: null }, orderBy: { weekday: "asc" } },
+      enrollments: { select: { status: true } },
     },
   });
   if (!c) notFound();
   if (user.role === "TEACHER" && c.teacherId !== user.id) notFound();
   const today = todayVN();
-  const held = c.sessions.filter((s) => s.status === "SCHEDULED" && toDay(s.date) < today);
-  const cancelled = c.sessions.filter((s) => s.status === "CANCELLED");
-  const upcoming = c.sessions.filter((s) => s.status === "SCHEDULED" && toDay(s.date) >= today);
-  let n = 0;
+  const manage = can(user.role, "class.manage");
+  const money_ = can(user.role, "tuition.view");
+  const tab = sp.tab === "diem-danh" ? "att" : sp.tab === "hoc-phi" && money_ ? "fee" : sp.tab === "cong-no" && money_ ? "debt" : "stu";
+  const activeCount = c.enrollments.filter((e) => e.status === "ACTIVE").length;
+  const tuition = money_ ? await classTuition(c.id, today) : [];
+  const debtors = tuition.filter((t) => t.remain > 0).length;
+
+  const options = manage ? await Promise.all([
+    db.course.findMany({ where: { active: true }, include: { program: true }, orderBy: [{ program: { order: "asc" } }, { order: "asc" }] }),
+    db.user.findMany({ where: { role: "TEACHER", active: true }, orderBy: { fullName: "asc" } }),
+    db.room.findMany({ orderBy: { name: "asc" } }),
+    db.grade.findMany({ orderBy: { order: "asc" } }),
+  ]).then(([courses, teachers, rooms, grades]) => ({ courses, teachers, rooms, grades })) : null;
+
+  const sched = c.schedules.map((s) => `${WEEKDAY_SHORT[s.weekday]} ${s.startTime}–${s.endTime}`).join(" · ");
+  const href = (t: string) => `/lop-hoc/${c.code}${t ? `?tab=${t}` : ""}`;
+  const tabs = [
+    { key: "stu", href: href(""), label: "Học viên", icon: <Users size={16} />, count: activeCount },
+    { key: "att", href: href("diem-danh"), label: "Điểm danh", icon: <ClipboardCheck size={16} /> },
+    ...(money_ ? [
+      { key: "fee", href: href("hoc-phi"), label: "Học phí", icon: <Receipt size={16} /> },
+      { key: "debt", href: href("cong-no"), label: "Công nợ", icon: <HandCoins size={16} />, count: debtors },
+    ] : []),
+  ];
 
   return (
     <>
-      <Link href="/lop-hoc" className="mb-3 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"><ArrowLeft size={15} /> Danh sách lớp</Link>
-      <PageHeader title={c.name} subtitle={`${c.code} · ${c.course?.program.name ?? ""} · ${c.status === "OPEN" ? "đang mở" : "đã kết thúc"}`} />
-
-      <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Box label="Đã học" value={`${held.length}${c.totalSessions ? `/${c.totalSessions}` : ""} buổi`} />
-        <Box label="Sắp tới" value={`${upcoming.length} buổi`} />
-        <Box label="Nghỉ" value={`${cancelled.length} buổi`} />
-        <Box label="Học viên" value={`${c.enrollments.filter((e) => e.status === "ACTIVE").length}${c.maxStudents ? `/${c.maxStudents}` : ""}`} />
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="space-y-6">
-          <section className="card p-5">
-            <h2 className="mb-3 text-lg font-bold">Thông tin lớp</h2>
-            <ul className="space-y-2 text-sm text-slate-700">
-              <li className="flex gap-2"><User size={16} className="mt-0.5 text-sky-500" />{c.teacher?.fullName ?? "Chưa phân công"}</li>
-              <li className="flex gap-2"><MapPin size={16} className="mt-0.5 text-rose-500" />{c.room?.name ?? "—"}</li>
-              <li className="flex gap-2"><Users size={16} className="mt-0.5 text-indigo-500" />{c.grade?.name ?? "—"}</li>
-              <li className="flex gap-2"><BookOpen size={16} className="mt-0.5 text-amber-500" />{c.course?.coursebook ?? "—"}</li>
-              <li className="flex gap-2"><CalendarDays size={16} className="mt-0.5 text-violet-500" />Khai giảng {fmtDate(c.startDate)}{c.endDate ? ` · dự kiến kết thúc ${fmtDate(c.endDate)}` : ""}</li>
-            </ul>
-            {can(user.role, "tuition.view") && (
-              <div className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-sm"><b>{money(c.unitPrice)}</b> <span className="text-slate-500">/ {c.feeMode === "PER_SESSION" ? "buổi" : "khóa"}</span></div>
-            )}
-            <h3 className="mb-2 mt-4 text-sm font-bold text-slate-500">Lịch cố định</h3>
-            {c.schedules.map((s) => (
-              <div key={s.id} className="flex justify-between py-1 text-sm">
-                <span>{WEEKDAY_LONG[s.weekday]}</span><b>{s.startTime}–{s.endTime}</b>
-              </div>
-            ))}
-            <p className="mt-1 text-xs text-slate-400">Áp dụng từ {fmtDate(c.schedules[0]?.validFrom)}. Buổi học tự sinh theo lịch này.</p>
-          </section>
-
-          <section className="card p-5">
-            <h2 className="mb-3 text-lg font-bold">Học viên</h2>
-            <ol className="space-y-1.5 text-sm">
-              {c.enrollments.map((e, i) => (
-                <li key={e.id} className={clsx("flex items-center gap-2", e.status === "LEFT" && "opacity-60")}>
-                  <span className="w-6 text-right text-xs text-slate-400">{i + 1}.</span>
-                  <Link href={`/hoc-sinh/${e.student.code}`} className="flex-1 hover:underline">{e.student.fullName}</Link>
-                  <span className="text-xs text-slate-400">vào {fmtDate(e.joinDate).slice(0, 5)}</span>
-                </li>
-              ))}
-            </ol>
-          </section>
-        </div>
-
-        <section className="card overflow-hidden lg:col-span-2">
-          <h2 className="px-5 pt-5 text-lg font-bold">Danh sách buổi học</h2>
-          <div className="overflow-x-auto">
-            <table className="mt-3 w-full min-w-[620px] text-sm">
-              <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                <tr><th className="px-4 py-2.5">#</th><th className="px-3 py-2.5">Ngày</th><th className="px-3 py-2.5">Giờ</th><th className="px-3 py-2.5">Nội dung</th><th className="px-4 py-2.5 text-right">Điểm danh</th></tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {c.sessions.map((s) => {
-                  const day = toDay(s.date);
-                  const off = s.status === "CANCELLED";
-                  if (!off) n++;
-                  const present = s.attendance.filter((a) => a.status === "PRESENT").length;
-                  return (
-                    <tr key={s.id} className={clsx(off && "bg-slate-50/70 text-slate-400", day === today && "bg-brand-50/60")}>
-                      <td className="px-4 py-2 text-xs">{off ? "" : n}</td>
-                      <td className="whitespace-nowrap px-3 py-2">{WEEKDAY_SHORT[weekday(day)]} {fmtDate(day)}</td>
-                      <td className="whitespace-nowrap px-3 py-2">{s.startTime}–{s.endTime}</td>
-                      <td className="px-3 py-2">
-                        {SOURCE[s.source] && <span className={`badge mr-1.5 ${SOURCE[s.source].cls}`}>{SOURCE[s.source].label}</span>}
-                        {off ? <span><span className="badge mr-1.5 bg-slate-200 text-slate-600">Nghỉ</span>{s.cancelReason}</span> : <span className={day >= today ? "text-slate-400" : ""}>{s.taughtContent ?? (day >= today ? "Chưa học" : "")}</span>}
-                        {!off && s.homework && <div className="text-xs text-slate-500">BTVN: {s.homework}</div>}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-2 text-right">
-                        {off || day >= today ? "" : s._count.attendance ? <span className="text-green-700">{present}/{s._count.attendance} có mặt</span> : <span className="text-amber-600">Chưa điểm danh</span>}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+      <section className="card mb-5 overflow-hidden">
+        <div className="flex flex-wrap items-start gap-4 p-5" style={{ background: `linear-gradient(90deg, ${c.color}14, transparent 70%)` }}>
+          <Link href="/lop-hoc" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-slate-600 shadow-sm ring-1 ring-slate-200 hover:bg-slate-50" aria-label="Quay lại"><ArrowLeft size={19} /></Link>
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-white shadow-md" style={{ background: c.color }}><Presentation size={22} /></span>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-extrabold tracking-tight">{c.name}</h1>
+              <span className={clsx("badge", c.status === "OPEN" ? "bg-green-50 text-green-700" : "bg-slate-100 text-slate-500")}>{c.status === "OPEN" ? "Đang mở" : "Đã kết thúc"}</span>
+            </div>
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-slate-600">
+              <span className="inline-flex items-center gap-1"><CalendarDays size={14} className="text-slate-400" />{sched || "Chưa có lịch"}</span>
+              <span className="inline-flex items-center gap-1"><User size={14} className="text-slate-400" />{c.teacher?.fullName ?? "Chưa phân công"}</span>
+              <span className="inline-flex items-center gap-1"><MapPin size={14} className="text-slate-400" />{c.room?.name ?? "—"}</span>
+              <span className="inline-flex items-center gap-1"><Flag size={14} className="text-slate-400" />Từ {fmtDate(c.startDate)}{c.endDate ? ` đến ${fmtDate(c.endDate)}` : ""}</span>
+              {money_ && (
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="badge bg-amber-50 text-amber-700">{c.feeMode === "PER_SESSION" ? "Theo số buổi học" : `Trọn khóa${c.totalSessions ? ` ${c.totalSessions} buổi` : ""}`}</span>
+                  {money(c.unitPrice)}/{c.feeMode === "PER_SESSION" ? "buổi" : "khóa"}
+                </span>
+              )}
+            </div>
           </div>
-        </section>
-      </div>
+          {manage && options && (
+            <div className="flex gap-2">
+              <ModalButton label="Sửa lớp" icon={<Pencil size={16} />} title={`Sửa lớp ${c.name}`} size="lg">
+                <ActionForm action={updateClass.bind(null, c.id)}>
+                  <ClassFields o={options} c={c} />
+                </ActionForm>
+              </ModalButton>
+              <RowMenu label={<span className="px-0.5">⋮</span>}>
+                <ModalButton variant="menu" label="Thêm buổi học bù" icon={<CalendarPlus size={15} />} title="Thêm buổi học bù / buổi thêm" subtitle={c.name} size="sm">
+                  <AddSessionForm classId={c.id} defaultStart={c.schedules[0]?.startTime} defaultEnd={c.schedules[0]?.endTime} />
+                </ModalButton>
+                {c.status === "OPEN" ? (
+                  <ConfirmButton variant="menu" label="Kết thúc lớp" icon={<Flag size={15} />} title="Kết thúc lớp?" confirmLabel="Kết thúc lớp"
+                    message="Lớp chuyển sang “Đã kết thúc”, học viên đang học chuyển thành đã nghỉ từ hôm nay. Dữ liệu điểm danh và học phí được giữ nguyên."
+                    action={setClassStatus.bind(null, c.id, "ENDED")} />
+                ) : (
+                  <ConfirmButton variant="menu" label="Mở lại lớp" icon={<Flag size={15} />} title="Mở lại lớp?" confirmLabel="Mở lại" message="Lớp sẽ hiện lại trong danh sách lớp đang mở." action={setClassStatus.bind(null, c.id, "OPEN")} />
+                )}
+                <ConfirmButton label="Xóa lớp" icon={<Trash2 size={15} />} title={`Xóa lớp ${c.name}?`}
+                  message="Chỉ xóa được lớp chưa điểm danh và chưa thu học phí (ví dụ tạo nhầm). Thao tác này không hoàn tác được."
+                  action={deleteClass.bind(null, c.id)} />
+              </RowMenu>
+            </div>
+          )}
+        </div>
+        <nav className="flex gap-1 overflow-x-auto border-t border-slate-100 px-3">
+          {tabs.map((t) => (
+            <Link key={t.key} href={t.href} className={clsx("inline-flex shrink-0 items-center gap-2 border-b-2 px-3 py-3 text-sm font-semibold transition",
+              tab === t.key ? "border-brand-500 text-brand-600" : "border-transparent text-slate-500 hover:text-slate-800")}>
+              {t.icon}{t.label}
+              {t.count !== undefined && <span className={clsx("rounded-md px-1.5 text-xs", tab === t.key ? "bg-brand-50" : "bg-slate-100")}>{t.count}</span>}
+            </Link>
+          ))}
+        </nav>
+      </section>
+
+      {tab === "stu" && <StudentsTab cls={c} sp={sp} manage={manage} canStudent={can(user.role, "student.manage")} showMoney={money_} tuition={tuition} />}
+      {tab === "att" && <AttendanceTab cls={c} month={sp.thang} canTake={can(user.role, "attendance.take")} manage={manage} />}
+      {(tab === "fee" || tab === "debt") && <TuitionTab cls={c} rows={tuition} sp={sp} debtOnly={tab === "debt"} canCollect={can(user.role, "tuition.collect")} />}
     </>
   );
-}
-
-function Box({ label, value }: { label: string; value: string }) {
-  return <div className="card p-4"><div className="text-[13px] text-slate-500">{label}</div><div className="text-xl font-extrabold">{value}</div></div>;
 }

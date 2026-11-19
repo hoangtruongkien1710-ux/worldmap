@@ -185,7 +185,7 @@ export async function seedAccounting(db: PrismaClient, rand: () => number, today
       const transfer = rand() < 0.8;
       const payment = await db.payment.create({
         data: {
-          invoiceId: inv.id, amount: p.amount, method: transfer ? "TRANSFER" : "CASH", paidAt: toDate(p.day),
+          invoiceId: inv.id, classId: c.id, amount: p.amount, method: transfer ? "TRANSFER" : "CASH", paidAt: toDate(p.day),
           collectedById: collector, idempotencyKey: `seed-${e.id}-${i}`,
           txnRef: transfer ? `FT26${String(Math.floor(rand() * 1e8)).padStart(8, "0")}` : null,
           note: plan.length > 1 ? `Đợt ${i + 1}/${plan.length}` : null,
