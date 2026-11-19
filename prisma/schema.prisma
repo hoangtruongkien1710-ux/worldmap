@@ -407,6 +407,20 @@ model CashAccount {
   openingDate    DateTime  @db.Date
   active         Boolean   @default(true)
   txns           CashTxn[] @relation("TxnAccount")
+  counts         CashCount[]
+}
+
+// Kiểm quỹ cuối ngày: số tiền đếm thực tế để so với sổ.
+model CashCount {
+  id        String      @id @default(cuid())
+  accountId String
+  account   CashAccount @relation(fields: [accountId], references: [id])
+  date      DateTime    @db.Date
+  counted   Int
+  note      String?
+  createdAt DateTime    @default(now())
+
+  @@unique([accountId, date])
 }
 
 enum Direction {

@@ -360,7 +360,7 @@ export async function seedAccounting(db: PrismaClient, rand: () => number, today
 }
 
 /** Đánh lại số chứng từ theo thứ tự ngày trong từng tháng (dữ liệu mẫu sinh theo học viên nên lộn thứ tự). */
-async function renumberByDate(db: PrismaClient) {
+export async function renumberByDate(db: PrismaClient) {
   const key = (code: string) => code.split("-")[0];
   const txns = await db.cashTxn.findMany({ orderBy: [{ date: "asc" }, { createdAt: "asc" }] });
   const n = new Map<string, number>();

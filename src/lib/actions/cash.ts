@@ -212,3 +212,16 @@ export async function deleteSupplier(id: string, _: ActionResult) {
     return "Đã xóa nhà cung cấp.";
   }, PATHS);
 }
+
+/** Kiểm quỹ: ghi số tiền đếm thực tế cuối ngày (ghi đè nếu đã kiểm). */
+export async function saveCashCount(accountId: string, d: string, _: ActionResult, f: FormData) {
+  return run(async () => {
+    const user = await requirePermission("accounting.post");
+    const counted = int(f, "counted", "số tiền đếm được");
+    if (counted === null || counted < 0) throw new UserError("Nhập số tiền đếm được.");
+    const note = opt(f, "note");
+    await db.cashCount.upsert({ where: { accountId_date: { accountId, date: toDate(d) } }, update: { counted, note }, create: { accountId, date: toDate(d), counted, note } });
+    await audit(user.id, "count", "CashAccount", accountId, { day: d, counted });
+    return "Đã lưu kết quả kiểm quỹ.";
+  }, PATHS);
+}

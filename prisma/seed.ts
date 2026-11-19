@@ -9,6 +9,7 @@ import { syncClassSessions } from "../src/lib/schedule/sync";
 import { planSessions } from "../src/lib/schedule/generate";
 import { addDays, todayVN, toDate } from "../src/lib/dates";
 import { seedAccounting } from "./seed-accounting";
+import { seedReportExtras } from "./seed-reports";
 
 const db = new PrismaClient();
 
@@ -359,6 +360,7 @@ async function main() {
 
   // ---- Kế toán: quỹ, ngân hàng, học phí, chi phí, lương, bút toán ----
   await seedAccounting(db, rand, today);
+  await seedReportExtras(db, rand, today);
 
   const counts = {
     programs: await db.program.count(),
