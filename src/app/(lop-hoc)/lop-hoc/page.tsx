@@ -5,6 +5,9 @@ import { ActionForm, ConfirmButton, ModalButton, RowMenu } from "@/components/ui
 import { ClassFields, type ClassOptions } from "@/components/classes/forms";
 import { CourseFields } from "@/components/classes/course-fields";
 import { loadClassOptions } from "@/lib/classes/options";
+import { FilterForm, FilterSelect } from "@/components/classes/filter-form";
+import { classTuition } from "@/lib/tuition/summary";
+import { monthOf, monthRange, shiftMonth, toDay } from "@/lib/dates";
 import { createClass, deleteClass, setClassStatus, updateClass } from "@/lib/actions/classes";
 import { createCourse, deleteCourse, updateCourse } from "@/lib/actions/courses";
 import { PageHeader } from "@/components/layout/app-shell";
@@ -17,7 +20,7 @@ import { money } from "@/lib/money";
 export const metadata = { title: "Lớp học" };
 export const dynamic = "force-dynamic";
 
-type Search = { tab?: string; ct?: string; tt?: string };
+type Search = { tab?: string; ct?: string; tt?: string; gv?: string; kh?: string; kg?: string; hp?: string; q?: string };
 
 export default async function ClassesPage({ searchParams }: { searchParams: Promise<Search> }) {
   const user = await guardPage("class.view");
@@ -53,8 +56,7 @@ export default async function ClassesPage({ searchParams }: { searchParams: Prom
       ) : (
         <ClassList
           programs={programs}
-          program={sp.ct}
-          status={sp.tt === "ket-thuc" ? "ENDED" : "OPEN"}
+          sp={sp}
           teacherId={user.role === "TEACHER" ? user.id : undefined}
           showPrice={showPrice}
           options={options}
@@ -73,16 +75,40 @@ function TabLink({ href, active, children }: { href: string; active: boolean; ch
   );
 }
 
-async function ClassList({ programs, program, status, teacherId, showPrice, options }: {
+async function ClassList({ programs, sp, teacherId, showPrice, options }: {
   programs: { id: string; code: string; name: string; color: string }[];
-  program?: string; status: "OPEN" | "ENDED"; teacherId?: string; showPrice: boolean; options: ClassOptions | null;
+  sp: Search; teacherId?: string; showPrice: boolean; options: ClassOptions | null;
 }) {
   const today = todayVN();
-  const classes = await db.class.findMany({
+  const status = sp.tt === "ket-thuc" ? "ENDED" : sp.tt === "tat-ca" ? undefined : "OPEN";
+  const [teachers, courses, starts] = await Promise.all([
+    teacherId ? [] : db.user.findMany({ where: { role: "TEACHER" }, orderBy: { fullName: "asc" }, select: { id: true, username: true, fullName: true, active: true } }),
+    db.course.findMany({ include: { program: true }, orderBy: [{ program: { order: "asc" } }, { order: "asc" }] }),
+    db.class.findMany({ select: { startDate: true }, orderBy: { startDate: "desc" } }),
+  ]);
+  const startMonths = [...new Set(starts.map((c) => monthOf(toDay(c.startDate))))];
+  const thisMonth = monthOf(today);
+  // Khoảng thời gian khai giảng
+  const range = (() => {
+    const k = sp.kg;
+    if (!k) return null;
+    if (k === "3-thang") return { from: `${shiftMonth(thisMonth, -2)}-01`, to: monthRange(thisMonth).to };
+    if (k === "6-thang") return { from: `${shiftMonth(thisMonth, -5)}-01`, to: monthRange(thisMonth).to };
+    if (/^nam-\d{4}$/.test(k)) return { from: `${k.slice(4)}-01-01`, to: `${k.slice(4)}-12-31` };
+    if (/^\d{4}-\d{2}$/.test(k)) return monthRange(k);
+    return null;
+  })();
+  const teacher = teachers.find((t) => t.username === sp.gv);
+  const q = sp.q?.trim();
+
+  const all = await db.class.findMany({
     where: {
-      status,
-      ...(teacherId ? { teacherId } : {}),
-      ...(program ? { course: { program: { code: program } } } : {}),
+      ...(status ? { status } : {}),
+      ...(teacherId ? { teacherId } : teacher ? { teacherId: teacher.id } : sp.gv === "chua-co" ? { teacherId: null } : {}),
+      ...(sp.ct ? { course: { program: { code: sp.ct } } } : {}),
+      ...(sp.kh ? { course: { code: sp.kh } } : {}),
+      ...(range ? { startDate: { gte: toDate(range.from), lte: toDate(range.to) } } : {}),
+      ...(q ? { OR: [{ name: { contains: q, mode: "insensitive" } }, { code: { contains: q, mode: "insensitive" } }] } : {}),
     },
     include: {
       course: { include: { program: true } },
@@ -90,32 +116,83 @@ async function ClassList({ programs, program, status, teacherId, showPrice, opti
       room: true,
       grade: true,
       schedules: { where: { validTo: null }, orderBy: { weekday: "asc" } },
-      enrollments: { where: { status: status === "OPEN" ? "ACTIVE" : undefined }, select: { id: true } },
+      enrollments: { select: { id: true, status: true } },
       sessions: { where: { status: "SCHEDULED", date: { lt: toDate(today) } }, select: { id: true } },
     },
     orderBy: [{ course: { program: { order: "asc" } } }, { course: { order: "asc" } }, { startDate: "desc" }],
   });
-
-  const qs = (p?: string, t?: string) => {
-    const u = new URLSearchParams();
-    if (p) u.set("ct", p);
-    if (t) u.set("tt", t);
-    const s = u.toString();
-    return `/lop-hoc${s ? `?${s}` : ""}`;
-  };
+  // Học phí từng lớp: cùng cách tính với tab Học phí trong chi tiết lớp.
+  const fees = new Map<string, { due: number; paid: number; remain: number; debtors: number }>();
+  if (showPrice) {
+    await Promise.all(all.map(async (c) => {
+      const rows = await classTuition(c.id, today);
+      fees.set(c.id, { due: rows.reduce((s, r) => s + r.due, 0), paid: rows.reduce((s, r) => s + r.paid, 0), remain: rows.reduce((s, r) => s + r.remain, 0), debtors: rows.filter((r) => r.remain > 0).length });
+    }));
+  }
+  const classes = all.filter((c) => !showPrice || !sp.hp ? true : sp.hp === "con-no" ? (fees.get(c.id)?.remain ?? 0) > 0 : (fees.get(c.id)?.remain ?? 0) === 0);
+  const sumFee = (k: "due" | "paid" | "remain") => classes.reduce((s, c) => s + (fees.get(c.id)?.[k] ?? 0), 0);
+  const filtered = !!(sp.ct || sp.kh || sp.kg || sp.gv || sp.hp || q || (sp.tt && sp.tt !== "mo"));
 
   return (
     <>
-      <div className="mb-5 flex flex-wrap gap-2 text-sm">
-        <Chip href={qs(undefined, status === "ENDED" ? "ket-thuc" : undefined)} active={!program}>Tất cả</Chip>
-        {programs.map((p) => (
-          <Chip key={p.id} href={qs(p.code, status === "ENDED" ? "ket-thuc" : undefined)} active={program === p.code} color={p.color}>
-            {p.name}
-          </Chip>
-        ))}
-        <span className="mx-1 w-px bg-slate-200" />
-        <Chip href={qs(program)} active={status === "OPEN"}>Đang mở</Chip>
-        <Chip href={qs(program, "ket-thuc")} active={status === "ENDED"}>Đã kết thúc</Chip>
+      <FilterForm action="/lop-hoc" resetHref="/lop-hoc" active={filtered}>
+        <label className="col-span-2 block min-w-0 sm:col-span-1">
+          <span className="mb-1 block text-xs font-semibold text-slate-500">Tìm lớp</span>
+          <input name="q" defaultValue={sp.q} placeholder="Tên hoặc mã lớp" className="input w-full" />
+        </label>
+        <FilterSelect label="Thời gian khai giảng" name="kg" value={sp.kg}>
+          <option value="">Mọi thời gian</option>
+          <option value={thisMonth}>Tháng này</option>
+          <option value="3-thang">3 tháng gần đây</option>
+          <option value="6-thang">6 tháng gần đây</option>
+          <option value={`nam-${thisMonth.slice(0, 4)}`}>Năm {thisMonth.slice(0, 4)}</option>
+          <optgroup label="Theo tháng">
+            {startMonths.map((m) => <option key={m} value={m}>Tháng {m.slice(5)}/{m.slice(0, 4)}</option>)}
+          </optgroup>
+        </FilterSelect>
+        {!teacherId && (
+          <FilterSelect label="Giáo viên" name="gv" value={sp.gv}>
+            <option value="">Tất cả giáo viên</option>
+            {teachers.map((t) => <option key={t.id} value={t.username}>{t.fullName}{t.active ? "" : " (đã khóa)"}</option>)}
+            <option value="chua-co">Chưa phân công</option>
+          </FilterSelect>
+        )}
+        <FilterSelect label="Tình trạng lớp" name="tt" value={sp.tt ?? "mo"}>
+          <option value="mo">Đang mở</option>
+          <option value="ket-thuc">Đã kết thúc</option>
+          <option value="tat-ca">Tất cả</option>
+        </FilterSelect>
+        <FilterSelect label="Chương trình" name="ct" value={sp.ct}>
+          <option value="">Tất cả chương trình</option>
+          {programs.map((p) => <option key={p.id} value={p.code}>{p.name}</option>)}
+        </FilterSelect>
+        <FilterSelect label="Khóa học" name="kh" value={sp.kh}>
+          <option value="">Tất cả khóa học</option>
+          {programs.map((p) => (
+            <optgroup key={p.id} label={p.name}>
+              {courses.filter((k) => k.programId === p.id && (!sp.ct || p.code === sp.ct)).map((k) => <option key={k.id} value={k.code}>{k.name}{k.active ? "" : " (ngừng)"}</option>)}
+            </optgroup>
+          ))}
+        </FilterSelect>
+        {showPrice && (
+          <FilterSelect label="Học phí" name="hp" value={sp.hp}>
+            <option value="">Tất cả</option>
+            <option value="con-no">Còn học phí chưa thu</option>
+            <option value="du">Đã thu đủ</option>
+          </FilterSelect>
+        )}
+      </FilterForm>
+
+      <div className="mb-5 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl bg-white px-4 py-3 text-sm ring-1 ring-slate-200">
+        <span><b>{classes.length}</b> lớp</span>
+        <span><b>{classes.reduce((s, c) => s + c.enrollments.filter((e) => e.status === "ACTIVE").length, 0)}</b> học viên đang học</span>
+        {showPrice && (
+          <>
+            <span>Phải thu <b>{money(sumFee("due"))}</b></span>
+            <span>Đã thu <b className="text-emerald-700">{money(sumFee("paid"))}</b></span>
+            <span>Chưa thu <b className="text-rose-600">{money(sumFee("remain"))}</b></span>
+          </>
+        )}
       </div>
 
       {classes.length === 0 && <div className="card p-8 text-center text-sm text-slate-500">Không có lớp nào.</div>}
@@ -123,6 +200,7 @@ async function ClassList({ programs, program, status, teacherId, showPrice, opti
       <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
         {classes.map((c) => {
           const done = c.sessions.length;
+          const fee = fees.get(c.id);
           const total = c.totalSessions;
           const pct = total ? Math.min(100, Math.round((done / total) * 100)) : null;
           const sched = c.schedules.map((s) => `${WEEKDAY_SHORT[s.weekday]} ${s.startTime}–${s.endTime}`).join(" · ");
@@ -164,14 +242,31 @@ async function ClassList({ programs, program, status, teacherId, showPrice, opti
                     {c.course?.coursebook ? `${c.course.coursebook} · ` : ""}Khai giảng {fmtDate(c.startDate)}</li>
                 </ul>
                 {showPrice && c.course && (
-                  <div className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-slate-50 px-2.5 py-1 text-[13px]">
-                    <b className="text-slate-800">{money(c.unitPrice)}</b>
-                    <span className="text-slate-500">/ {c.feeMode === "PER_SESSION" ? "buổi" : "khóa"}</span>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-50 px-2.5 py-1 text-[13px]">
+                      <b className="text-slate-800">{money(c.unitPrice)}</b>
+                      <span className="text-slate-500">/ {c.feeMode === "PER_SESSION" ? "buổi" : "khóa"}</span>
+                    </span>
+                    {c.status === "ENDED" && <span className="badge bg-slate-100 text-slate-500">Đã kết thúc</span>}
                   </div>
+                )}
+                {showPrice && fee && (
+                  <Link href={`/lop-hoc/${c.code}?tab=${fee.remain ? "cong-no" : "hoc-phi"}`} className={clsx("mt-3 block rounded-xl px-3 py-2 text-[13px] ring-1 transition hover:brightness-95", fee.remain ? "bg-rose-50 ring-rose-100" : "bg-emerald-50 ring-emerald-100")}>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={fee.remain ? "font-semibold text-rose-700" : "font-semibold text-emerald-700"}>{fee.remain ? `Chưa thu ${money(fee.remain)}` : fee.due ? "Đã thu đủ học phí" : "Chưa phát sinh học phí"}</span>
+                      {fee.remain > 0 && <span className="text-xs text-rose-600">{fee.debtors} học viên</span>}
+                    </div>
+                    {fee.due > 0 && (
+                      <>
+                        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.round((fee.paid / fee.due) * 100)}%` }} /></div>
+                        <div className="mt-1 flex justify-between text-[11px] text-slate-500"><span>Đã thu {money(fee.paid)}</span><span>Phải thu {money(fee.due)}</span></div>
+                      </>
+                    )}
+                  </Link>
                 )}
               </div>
               <div className="grid grid-cols-3 divide-x divide-slate-100 border-t border-slate-100 text-center">
-                <Metric value={`${c.enrollments.length}${c.maxStudents ? `/${c.maxStudents}` : ""}`} label="Học viên" icon={<Users size={13} />} />
+                <Metric value={`${c.enrollments.filter((e) => e.status === "ACTIVE").length}${c.maxStudents ? `/${c.maxStudents}` : ""}`} label="Học viên" icon={<Users size={13} />} />
                 <Metric value={total ? `${done}/${total}` : done} label="Buổi đã học" />
                 <div className="px-3 py-3">
                   {pct !== null ? (
@@ -192,16 +287,6 @@ async function ClassList({ programs, program, status, teacherId, showPrice, opti
         })}
       </div>
     </>
-  );
-}
-
-function Chip({ href, active, color, children }: { href: string; active: boolean; color?: string; children: React.ReactNode }) {
-  return (
-    <Link href={href} className={clsx("inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 font-medium ring-1 transition",
-      active ? "bg-slate-900 text-white ring-slate-900" : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50")}>
-      {color && <span className="h-2 w-2 rounded-full" style={{ background: color }} />}
-      {children}
-    </Link>
   );
 }
 
