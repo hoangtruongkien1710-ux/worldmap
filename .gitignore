@@ -1,10 +1,15 @@
 node_modules
 .next
+.next-*
 out
 .env
 .env.local
+.env.*.local
 *.tsbuildinfo
 next-env.d.ts
+*.log
 backups/
 uploads/
 coverage/
+*service-account*.json
+google-key.json

@@ -13,12 +13,12 @@ Cần cài **Docker Desktop** (Windows/macOS) hoặc Docker Engine (Linux).
 
 ```bash
 cp .env.example .env
-# Mở .env, đổi AUTH_SECRET thành một chuỗi ngẫu nhiên dài
-# (lần đầu muốn có dữ liệu mẫu thì thêm dòng SEED_DEMO=true)
+# Mở .env, điền DB_PASSWORD, DATABASE_URL, AUTH_SECRET (chuỗi ngẫu nhiên dài), AUTH_URL
+# (lần đầu muốn có dữ liệu mẫu thì đặt SEED_DEMO=true)
 docker compose up -d --build
 ```
 
-Mở http://localhost:3000.
+Mở http://localhost:3005 (cổng đổi bằng `APP_PORT` trong `.env`).
 
 **Tài khoản mẫu** (chỉ có khi `SEED_DEMO=true`). Mật khẩu chung: `Worldmap@2026`
 
@@ -44,15 +44,34 @@ Khi có tên miền: sửa `Caddyfile`, đặt `AUTH_URL=https://ten-mien`, rồ
 
 ## Chạy để lập trình
 
+Trên Windows dùng `npm.cmd` thay cho `npm`.
 ```bash
 npm install
-docker compose -f docker-compose.dev.yml up -d   # chỉ chạy PostgreSQL
-cp .env.example .env
-npx prisma migrate dev                            # tạo bảng
-npm run db:seed                                   # dữ liệu mẫu
-npm run dev                                       # http://localhost:3000
-npm test                                          # chạy test
+docker compose up -d db              # chỉ chạy PostgreSQL (cổng DB_PORT, chỉ mở trong máy)
+npx prisma migrate dev               # tạo bảng
+npm run db:seed                      # dữ liệu mẫu
+npm run dev                          # http://localhost:3006
+npm test                             # chạy test
 ```
+
+## Đưa lên VPS (app chạy bằng pm2)
+
+Làm 1 lần:
+```bash
+git clone https://github.com/hoangtruongkien1710-ux/worldmap.git ~/worldmap && cd ~/worldmap
+cp .env.example .env && nano .env    # APP_PORT=3300, DB_PORT=5441, mật khẩu DB, AUTH_SECRET, AUTH_URL
+# DATABASE_URL=postgresql://worldmap:<DB_PASSWORD>@127.0.0.1:5441/worldmap?schema=public
+docker compose up -d db backup       # database + sao lưu hằng ngày (không chạy app container)
+npm ci && npx prisma migrate deploy
+./capnhat.sh                         # lần đầu: build và đăng ký app với pm2
+pm2 startup                          # chép dòng sudo … nó in ra và chạy
+pm2 save
+```
+
+Mỗi lần có bản mới (sau khi `git push` từ máy tính): `cd ~/worldmap && ./capnhat.sh`.
+Script tự sao lưu DB (giữ 14 bản), `git pull`, cài thư viện, migrate, build ra thư mục tạm (lỗi thì app cũ vẫn chạy), `pm2 restart`, kiểm tra 200. Thử trước: `./capnhat.sh --dry-run`.
+Không sửa code trực tiếp trên VPS. Không mở cổng database trên tường lửa.
+Có tên miền: dùng Caddy, `quanly.tenmien.vn { reverse_proxy 127.0.0.1:3300 }`.
 
 ## Cấu trúc thư mục
 
@@ -69,11 +88,4 @@ src/lib/dates.ts             Xử lý ngày theo giờ Việt Nam
 
 ## Tiến độ
 
-- [x] **Giai đoạn 0:** khung app, đăng nhập, phân quyền, hai giao diện, Docker, dữ liệu mẫu
-- [ ] Giai đoạn 1: danh mục, lớp học, lịch học, người dùng, cài đặt
-- [ ] Giai đoạn 2: học sinh và ghi danh
-- [ ] Giai đoạn 3: điểm danh và nhận xét
-- [ ] Giai đoạn 4: học phí và công nợ
-- [ ] Giai đoạn 5: trang chủ đầy đủ, báo cáo
-- [ ] Giai đoạn 5b: kế toán
-- [ ] Giai đoạn 6: chuyển dữ liệu và triển khai
+Xem `NHATKY.md`. Ghi chú cho AI: `CLAUDE.md`.

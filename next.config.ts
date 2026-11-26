@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  // Docker build đặt NEXT_STANDALONE=1; VPS chạy bằng pm2 dùng `next start` bình thường
+  output: process.env.NEXT_STANDALONE === "1" ? "standalone" : undefined,
+  // capnhat.sh build ra thư mục tạm rồi mới đổi tên, để app cũ vẫn chạy nếu build lỗi
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   poweredByHeader: false,
 };
 

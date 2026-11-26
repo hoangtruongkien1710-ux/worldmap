@@ -13,7 +13,7 @@ WORKDIR /app
 RUN apk add --no-cache openssl
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-ENV NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_TELEMETRY_DISABLED=1 NEXT_STANDALONE=1
 RUN npx prisma generate && npm run build
 # Gói riêng công cụ migrate + seed (prisma CLI, tsx) để image chạy gọn
 RUN mkdir -p /tools && cp -r node_modules /tools/node_modules
