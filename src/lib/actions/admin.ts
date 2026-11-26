@@ -21,15 +21,23 @@ function checkPassword(p: string) {
   return p;
 }
 
+const NAME_MAX = 60;
+function readName(f: FormData) {
+  const n = req(f, "fullName", "họ tên");
+  if (n.length > NAME_MAX) throw new UserError(`Họ tên tối đa ${NAME_MAX} ký tự.`);
+  return n;
+}
+
 export async function createUser(_: ActionResult, f: FormData) {
   return run(async () => {
     const me = await requirePermission("user.manage");
     const username = req(f, "username", "tên đăng nhập").toLowerCase();
     if (!/^[a-z0-9._-]{3,30}$/.test(username)) throw new UserError("Tên đăng nhập chỉ gồm chữ không dấu, số, dấu chấm, gạch (3–30 ký tự).");
+    if (await db.user.findUnique({ where: { username }, select: { id: true } })) throw new UserError(`Tên đăng nhập “${username}” đã tồn tại, hãy chọn tên khác.`);
     const password = checkPassword(str(f, "password"));
     const branch = await db.branch.findFirst();
     const u = await db.user.create({
-      data: { username, fullName: req(f, "fullName", "họ tên"), role: readRole(f), phone: opt(f, "phone"), passwordHash: await bcrypt.hash(password, 10), branchId: branch?.id },
+      data: { username, fullName: readName(f), role: readRole(f), phone: opt(f, "phone"), passwordHash: await bcrypt.hash(password, 10), branchId: branch?.id },
     });
     await audit(me.id, "create", "User", u.id, { username });
     return `Đã tạo tài khoản ${username}.`;
@@ -41,7 +49,7 @@ export async function updateUser(userId: string, _: ActionResult, f: FormData) {
     const me = await requirePermission("user.manage");
     const role = readRole(f);
     if (userId === me.id && role !== "ADMIN") throw new UserError("Không thể tự bỏ quyền quản trị của chính mình.");
-    await db.user.update({ where: { id: userId }, data: { fullName: req(f, "fullName", "họ tên"), role, phone: opt(f, "phone") } });
+    await db.user.update({ where: { id: userId }, data: { fullName: readName(f), role, phone: opt(f, "phone") } });
     await audit(me.id, "update", "User", userId);
     return "Đã lưu tài khoản.";
   }, UPATHS);

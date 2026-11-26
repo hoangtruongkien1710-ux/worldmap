@@ -88,7 +88,7 @@ export function StudentFields({ grades, s, withStatus }: { grades: { id: number;
   return (
     <>
       <Grid>
-        <Field label="Họ tên học viên"><input name="fullName" defaultValue={s?.fullName} required className="input" /></Field>
+        <Field label="Họ tên học viên"><input name="fullName" defaultValue={s?.fullName} required maxLength={60} className="input" /></Field>
         <Field label="Đối tượng">
           <select name="gradeId" defaultValue={s?.gradeId ?? ""} className="input">
             <option value="">—</option>

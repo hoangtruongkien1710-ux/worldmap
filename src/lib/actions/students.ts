@@ -14,7 +14,7 @@ function readStudent(f: FormData) {
   const phone = opt(f, "phone");
   for (const v of [parentPhone, phone]) if (v && !/^0\d{9,10}$/.test(v.replace(/\s/g, ""))) throw new UserError("Số điện thoại phải có 10–11 chữ số, bắt đầu bằng 0.");
   return {
-    fullName: req(f, "fullName", "họ tên"),
+    fullName: (() => { const n = req(f, "fullName", "họ tên"); if (n.length > 60) throw new UserError("Họ tên tối đa 60 ký tự."); return n; })(),
     gradeId: int(f, "gradeId"),
     school: opt(f, "school"),
     parentName: opt(f, "parentName"),

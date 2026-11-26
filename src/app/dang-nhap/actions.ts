@@ -16,6 +16,7 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
   } catch (err) {
     if (err instanceof AuthError) {
       const code = (err as AuthError & { code?: string }).code;
+      if (code === "inactive") return { error: "Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên." };
       if (code === "locked") return { error: "Sai mật khẩu quá nhiều lần. Vui lòng thử lại sau 15 phút." };
       return { error: "Tên đăng nhập hoặc mật khẩu không đúng." };
     }

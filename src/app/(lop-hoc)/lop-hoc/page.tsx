@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MaterialsList } from "@/components/classes/materials";
 import clsx from "clsx";
 import { BookOpen, CalendarDays, Flag, GraduationCap, MapPin, Pencil, Plus, Trash2, User, Users } from "lucide-react";
 import { ActionForm, ConfirmButton, ModalButton, RowMenu } from "@/components/ui/modal";
@@ -302,7 +303,7 @@ function Metric({ value, label, icon }: { value: React.ReactNode; label: string;
 async function CourseCatalog({ manage }: { manage: boolean }) {
   const programs = await db.program.findMany({
     orderBy: { order: "asc" },
-    include: { courses: { where: { active: true }, orderBy: { order: "asc" } } },
+    include: { courses: { where: { active: true }, orderBy: { order: "asc" }, include: { materials: { orderBy: { createdAt: "asc" } } } } },
   });
   const allPrograms = programs.map(({ id, name }) => ({ id, name }));
   const range = (a?: number | null, b?: number | null) => (a && b && a !== b ? `${a}–${b}` : a ?? b ?? "");
@@ -346,7 +347,7 @@ async function CourseCatalog({ manage }: { manage: boolean }) {
                       {money(c.listedPrice)} <span className="font-normal text-slate-500">/ {c.priceUnit === "SESSION" ? "buổi" : "khóa"}</span>
                     </td>
                     <td className="px-3 py-3 text-slate-600">{range(c.classSizeMin, c.classSizeMax)} HV</td>
-                    <td className="px-5 py-3 text-slate-600">{c.coursebook ?? "—"}</td>
+                    <td className="px-5 py-3 text-slate-600"><div>{c.coursebook ?? "—"}</div><div className="mt-1"><MaterialsList items={c.materials} courseId={c.id} courseName={c.name} manage={manage} compact /></div></td>
                     {manage && (
                       <td className="px-3 py-3 text-right">
                         <RowMenu>

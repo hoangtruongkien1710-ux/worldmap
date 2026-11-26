@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { LogIn } from "lucide-react";
+import { PasswordInput } from "@/components/ui/password-input";
 import { loginAction, type LoginState } from "./actions";
 
 export function LoginForm() {
@@ -15,7 +16,7 @@ export function LoginForm() {
       </label>
       <label className="block text-sm font-semibold">
         Mật khẩu
-        <input name="password" type="password" autoComplete="current-password" required className="input mt-1.5" placeholder="Mật khẩu" />
+        <PasswordInput name="password" autoComplete="current-password" required className="mt-1.5" placeholder="Mật khẩu" />
       </label>
       {state.error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{state.error}</p>}
       <button type="submit" disabled={pending} className="btn btn-primary w-full py-2.5">

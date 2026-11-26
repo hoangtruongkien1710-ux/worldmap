@@ -14,7 +14,11 @@ export async function run(fn: () => Promise<string | void>, paths: string[] = ["
     return { ok: true, message: message || undefined, at: Date.now() };
   } catch (e) {
     if (e instanceof UserError) return { ok: false, error: e.message, at: Date.now() };
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return { ok: false, error: "Mã này đã tồn tại, hãy chọn mã khác.", at: Date.now() };
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      const f = String((e.meta?.target as string[] | string | undefined) ?? "");
+      const what = f.includes("username") ? "Tên đăng nhập" : f.includes("name") ? "Tên" : "Mã";
+      return { ok: false, error: `${what} này đã tồn tại, hãy chọn ${what.toLowerCase()} khác.`, at: Date.now() };
+    }
     if (e instanceof Error && e.message.includes("không có quyền")) return { ok: false, error: e.message, at: Date.now() };
     console.error(e);
     return { ok: false, error: "Có lỗi khi lưu, hãy thử lại.", at: Date.now() };

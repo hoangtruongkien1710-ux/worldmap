@@ -118,6 +118,23 @@ model Course {
   order           Int       @default(0)
   active          Boolean   @default(true)
   classes         Class[]
+  materials       CourseMaterial[]
+}
+
+/// Tài liệu / giáo trình của khóa: file tải lên (PDF, Word…) hoặc đường link.
+model CourseMaterial {
+  id        String   @id @default(cuid())
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title     String
+  url       String? // gắn link (Google Drive, website…)
+  fileName  String? // tên file gốc khi tải lên
+  filePath  String? // đường dẫn tương đối trong thư mục uploads
+  mimeType  String?
+  size      Int?
+  createdAt DateTime @default(now())
+
+  @@index([courseId])
 }
 
 // ---------- Lớp học & lịch ----------

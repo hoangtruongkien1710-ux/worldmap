@@ -13,7 +13,7 @@ import { PageHeader } from "@/components/layout/app-shell";
 import { db } from "@/lib/db";
 import { guardPage } from "@/lib/auth/session";
 import { can } from "@/lib/auth/permissions";
-import { loadInvoices } from "@/lib/tuition/summary";
+import { tuitionSheets } from "@/lib/tuition/month";
 import { money } from "@/lib/money";
 
 export const metadata = { title: "Học viên" };
@@ -70,11 +70,22 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
     },
     orderBy: { code: "asc" },
   });
-  const invoices = showMoney ? await loadInvoices({ studentId: { in: found.map((s) => s.id) } }) : [];
-  const debt = (id: string) => invoices.filter((i) => i.studentId === id).reduce((s, i) => s + i.remain, 0);
+  // Học phí theo học viên: cộng mọi phiếu (kể cả ghi danh chưa chốt) từ nơi tính duy nhất.
+  const fee = new Map<string, { total: number; paid: number; remain: number }>();
+  if (showMoney) {
+    const ids = new Set(found.map((s) => s.id));
+    for (const sh of await tuitionSheets()) {
+      if (!ids.has(sh.student.id)) continue;
+      const v = fee.get(sh.student.id) ?? { total: 0, paid: 0, remain: 0 };
+      v.total += sh.total; v.paid += sh.paid; v.remain += sh.remain;
+      fee.set(sh.student.id, v);
+    }
+  }
+  const debt = (id: string) => fee.get(id)?.remain ?? 0;
+  const feeState = (id: string) => { const v = fee.get(id); return !v || v.total <= 0 ? "none" : v.remain <= 0 ? "du" : v.paid > 0 ? "con-no" : "chua-dong"; };
   const rateOf = (s: (typeof found)[number]) => (s.attendance.length ? s.attendance.filter((a) => a.status === "PRESENT").length / s.attendance.length : 1);
   const students = found
-    .filter((s) => !showMoney || !sp.hp || (sp.hp === "con-no" ? debt(s.id) > 0 : debt(s.id) === 0))
+    .filter((s) => !showMoney || !sp.hp || (sp.hp === "con-no" ? debt(s.id) > 0 : sp.hp === "chua-dong" ? feeState(s.id) === "chua-dong" : feeState(s.id) === "du"))
     .sort((a, b) => sp.xep === "ten" ? a.fullName.split(" ").at(-1)!.localeCompare(b.fullName.split(" ").at(-1)!, "vi") || a.fullName.localeCompare(b.fullName, "vi")
       : sp.xep === "no" && showMoney ? debt(b.id) - debt(a.id)
       : sp.xep === "chuyen-can" ? rateOf(a) - rateOf(b)
@@ -143,7 +154,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
         {showMoney && (
           <FilterSelect label="Học phí" name="hp" value={sp.hp}>
             <option value="">Tất cả</option>
-            <option value="con-no">Còn nợ</option>
+            <option value="chua-dong">Chưa đóng học phí</option>
+            <option value="con-no">Còn nợ (chưa đóng / đóng thiếu)</option>
             <option value="du">Đã đóng đủ</option>
           </FilterSelect>
         )}
@@ -169,7 +181,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
               <tr>
                 <th className="px-4 py-3">Học viên</th><th className="px-3 py-3">Đối tượng</th><th className="px-3 py-3">Phụ huynh / liên hệ</th>
                 <th className="px-3 py-3">Lớp</th><th className="px-3 py-3 text-right">Chuyên cần</th>
-                {showMoney && <th className="px-4 py-3 text-right">Còn nợ</th>}
+                {showMoney && <th className="px-4 py-3 text-right">Học phí</th>}
                 {manage && <th className="w-12" />}
               </tr>
             </thead>
@@ -202,7 +214,13 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
                       {rate === null ? <span className="text-slate-400">—</span> : <span className={clsx("font-semibold", rate >= 85 ? "text-emerald-700" : rate >= 70 ? "text-amber-600" : "text-rose-600")}>{rate}%</span>}
                       <div className="text-xs text-slate-400">{present}/{total} buổi</div>
                     </td>
-                    {showMoney && <td className="whitespace-nowrap px-4 py-2.5 text-right">{d > 0 ? <b className="text-rose-600">{money(d)}</b> : <span className="badge bg-green-50 text-green-700">Đã đủ</span>}</td>}
+                    {showMoney && <td className="whitespace-nowrap px-4 py-2.5 text-right">{(() => {
+                      const st = feeState(s.id);
+                      if (st === "chua-dong") return <span className="inline-flex flex-col items-end gap-0.5"><span className="badge bg-rose-50 text-rose-700">Chưa đóng học phí</span><b className="text-xs text-rose-600">{money(d)}</b></span>;
+                      if (st === "con-no") return <span className="inline-flex flex-col items-end gap-0.5"><span className="badge bg-amber-50 text-amber-700">Còn nợ</span><b className="text-xs text-rose-600">{money(d)}</b></span>;
+                      if (st === "du") return <span className="badge bg-green-50 text-green-700">Đã đóng đủ</span>;
+                      return <span className="text-slate-400">—</span>;
+                    })()}</td>}
                     {manage && (
                       <td className="px-2 py-2.5 text-right">
                         <RowMenu>

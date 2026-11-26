@@ -1,6 +1,7 @@
 import { KeyRound, Lock, LockOpen, Pencil, Plus, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/layout/app-shell";
 import { ActionForm, ConfirmButton, Field, Grid, ModalButton, RowMenu } from "@/components/ui/modal";
+import { PasswordInput } from "@/components/ui/password-input";
 import { createUser, deleteUser, resetPassword, setUserActive, updateUser } from "@/lib/actions/admin";
 import { db } from "@/lib/db";
 import { guardPage } from "@/lib/auth/session";
@@ -36,7 +37,7 @@ export default async function Page() {
           <ModalButton variant="primary" label="Thêm tài khoản" icon={<Plus size={16} />} title="Thêm tài khoản">
             <ActionForm action={createUser} submitLabel="Tạo tài khoản">
               <UserFields />
-              <Field label="Mật khẩu ban đầu" hint="Ít nhất 8 ký tự, gửi cho người dùng và nhắc họ đổi"><input name="password" type="text" required minLength={8} className="input" autoComplete="off" /></Field>
+              <Field label="Mật khẩu ban đầu" hint="Ít nhất 8 ký tự, gửi cho người dùng và nhắc họ đổi"><PasswordInput name="password" required minLength={8} autoComplete="new-password" /></Field>
             </ActionForm>
           </ModalButton>
         } />
@@ -77,8 +78,8 @@ export default async function Page() {
                       </ModalButton>
                       <ModalButton variant="menu" label="Đặt lại mật khẩu" icon={<KeyRound size={15} />} title={`Đặt lại mật khẩu · ${u.fullName}`} subtitle={u.username} size="sm">
                         <ActionForm action={resetPassword.bind(null, u.id)} submitLabel="Đặt lại">
-                          <Field label="Mật khẩu mới"><input name="password" type="password" required minLength={8} className="input" autoComplete="new-password" /></Field>
-                          <Field label="Nhập lại"><input name="password2" type="password" required minLength={8} className="input" autoComplete="new-password" /></Field>
+                          <Field label="Mật khẩu mới"><PasswordInput name="password" required minLength={8} autoComplete="new-password" /></Field>
+                          <Field label="Nhập lại"><PasswordInput name="password2" required minLength={8} autoComplete="new-password" /></Field>
                         </ActionForm>
                       </ModalButton>
                       {u.id !== me.id && (u.active ? (
@@ -107,7 +108,7 @@ function UserFields({ u }: { u?: { username: string; fullName: string; role: str
   return (
     <>
       <Grid>
-        <Field label="Họ tên"><input name="fullName" defaultValue={u?.fullName} required className="input" /></Field>
+        <Field label="Họ tên" hint="Tối đa 60 ký tự"><input name="fullName" defaultValue={u?.fullName} required maxLength={60} className="input" /></Field>
         <Field label="Tên đăng nhập" hint={u ? "Không đổi được" : "Chữ không dấu, VD: gv.lan"}>
           <input name="username" defaultValue={u?.username} disabled={!!u} required={!u} className="input font-mono" autoComplete="off" />
         </Field>

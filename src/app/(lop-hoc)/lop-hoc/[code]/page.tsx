@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MaterialsList } from "@/components/classes/materials";
 import { notFound } from "next/navigation";
 import clsx from "clsx";
 import { ArrowLeft, CalendarDays, CalendarPlus, ClipboardCheck, Flag, HandCoins, MapPin, Pencil, Presentation, Receipt, Trash2, User, Users } from "lucide-react";
@@ -32,7 +33,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
   const c = await db.class.findUnique({
     where: { code: decodeURIComponent(code) },
     include: {
-      course: { include: { program: true } }, teacher: true, room: true, grade: true,
+      course: { include: { program: true, materials: { orderBy: { createdAt: "asc" } } } }, teacher: true, room: true, grade: true,
       schedules: { where: { validTo: null }, orderBy: { weekday: "asc" } },
       enrollments: { select: { status: true } },
     },
@@ -83,6 +84,12 @@ export default async function Page({ params, searchParams }: { params: Promise<{
                 </span>
               )}
             </div>
+            {c.course && (c.course.materials.length > 0 || manage) && (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[13px] text-slate-600">
+                <span className="font-semibold text-slate-500">Tài liệu{c.course.coursebook ? ` (${c.course.coursebook})` : ""}:</span>
+                <MaterialsList items={c.course.materials} courseId={c.course.id} courseName={c.course.name} manage={manage} />
+              </div>
+            )}
           </div>
           {manage && options && (
             <div className="flex gap-2">
