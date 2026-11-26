@@ -11,6 +11,7 @@ import { guardPage } from "@/lib/auth/session";
 import { pickMonth } from "@/lib/accounting/queries";
 import { fmtDate, monthRange, todayVN, toDate, toDay } from "@/lib/dates";
 import { money } from "@/lib/money";
+import { MoneyInput } from "@/components/ui/money-input";
 
 export const metadata = { title: "Chi phí & mua hàng" };
 export const dynamic = "force-dynamic";
@@ -64,7 +65,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ t
               </Grid>
               <Field label="Diễn giải"><input name="description" required className="input" placeholder="VD: Mua giáo trình HSK tháng 12" /></Field>
               <Grid cols={3}>
-                <Field label="Số tiền (đ)"><input name="amount" inputMode="numeric" required className="input" /></Field>
+                <Field label="Số tiền (đ)"><MoneyInput name="amount" required /></Field>
                 <Field label="Ngày hóa đơn"><input type="date" name="billDate" defaultValue={today} required className="input" /></Field>
                 <Field label="Hạn trả"><input type="date" name="dueDate" defaultValue={addDays(today, 30)} required className="input" /></Field>
               </Grid>
@@ -118,7 +119,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ t
                               <ModalButton variant="bare" className="inline-flex items-center gap-1 rounded-lg bg-brand-50 px-2.5 py-1 text-sm font-semibold text-brand-600 hover:bg-brand-100" label="Trả" icon={<Banknote size={14} />}
                                 title={`Trả nợ ${p.code}`} subtitle={`${p.supplier?.name} · còn nợ ${money(remain)}`} size="sm">
                                 <ActionForm action={payPayable.bind(null, p.id)} submitLabel="Lập phiếu chi">
-                                  <Field label="Số tiền (đ)"><input name="amount" inputMode="numeric" required defaultValue={remain.toLocaleString("vi-VN")} className="input" /></Field>
+                                  <Field label="Số tiền (đ)"><MoneyInput name="amount" required defaultValue={remain} /></Field>
                                   <Grid>
                                     <Field label="Nguồn tiền">
                                       <select name="accountId" required defaultValue={accounts.find((a) => a.kind === "BANK")?.id} className="input">{accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select>

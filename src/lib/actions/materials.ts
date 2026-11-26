@@ -20,18 +20,18 @@ export async function addMaterial(courseId: string, _: ActionResult, f: FormData
     if (!hasFile && !url) throw new UserError("Chọn file để tải lên hoặc dán link tài liệu.");
     if (hasFile && url) throw new UserError("Chỉ chọn một: tải file lên hoặc gắn link.");
     let title = str(f, "title");
-    if (title.length > 120) throw new UserError("Tên tài liệu tối đa 120 ký tự.");
+    if (title.length > 120) throw new UserError("Tên tài liệu tối đa 120 ký tự.", "title");
 
     if (url) {
-      if (!/^https?:\/\/\S+$/i.test(url)) throw new UserError("Link phải bắt đầu bằng http:// hoặc https://");
+      if (!/^https?:\/\/\S+$/i.test(url)) throw new UserError("Link phải bắt đầu bằng http:// hoặc https://", "url");
       const m = await db.courseMaterial.create({ data: { courseId, title: title || url, url } });
       await audit(me.id, "create", "CourseMaterial", m.id, { url });
       return "Đã gắn link tài liệu.";
     }
 
     const ext = path.extname((file as File).name).slice(1).toLowerCase();
-    if (!MATERIAL_EXT[ext]) throw new UserError(`Chỉ nhận file: ${Object.keys(MATERIAL_EXT).join(", ")}.`);
-    if ((file as File).size > MATERIAL_MAX_MB * 1024 * 1024) throw new UserError(`File tối đa ${MATERIAL_MAX_MB} MB.`);
+    if (!MATERIAL_EXT[ext]) throw new UserError(`Chỉ nhận file: ${Object.keys(MATERIAL_EXT).join(", ")}.`, "file");
+    if ((file as File).size > MATERIAL_MAX_MB * 1024 * 1024) throw new UserError(`File tối đa ${MATERIAL_MAX_MB} MB.`, "file");
     title ||= path.basename((file as File).name, path.extname((file as File).name));
     const m = await db.courseMaterial.create({ data: { courseId, title, fileName: (file as File).name, mimeType: MATERIAL_EXT[ext], size: (file as File).size } });
     const rel = path.join("materials", `${m.id}.${ext}`);

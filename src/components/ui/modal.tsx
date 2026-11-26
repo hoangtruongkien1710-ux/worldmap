@@ -1,15 +1,27 @@
 "use client";
 
-import { createContext, useActionState, useContext, useEffect, useRef, useState } from "react";
+import { createContext, isValidElement, useActionState, useContext, useEffect, useLayoutEffect, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { MoreVertical, X } from "lucide-react";
 
-export type ActionResult = { ok: boolean; error?: string; message?: string; at?: number };
+export type ActionResult = { ok: boolean; error?: string; field?: string; message?: string; at?: number };
 export type FormAction = (prev: ActionResult, formData: FormData) => Promise<ActionResult>;
 
 const CloseCtx = createContext<() => void>(() => {});
+/** Ô đang bị báo lỗi sau khi lưu (tên ô + lời nhắn) để Field hiện lỗi ngay dưới ô đó. */
+const FieldErrCtx = createContext<{ field?: string; error?: string }>({});
+
+/** Gửi form bằng JS để React không tự xóa các ô đã nhập khi máy chủ báo lỗi. */
+export function useKeepValuesSubmit(dispatch: (fd: FormData) => void) {
+  const [, start] = useTransition();
+  return (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget, (e.nativeEvent as SubmitEvent).submitter);
+    start(() => dispatch(fd));
+  };
+}
 export const useCloseModal = () => useContext(CloseCtx);
 
 const SIZE = { sm: "max-w-md", md: "max-w-xl", lg: "max-w-3xl", xl: "max-w-5xl" };
@@ -69,25 +81,58 @@ export function ModalButton({
   );
 }
 
-/** Form trong popup: gọi server action, báo lỗi tại chỗ, thành công thì đóng popup và tải lại dữ liệu. */
+/**
+ * Form trong popup: gọi server action, báo lỗi tại chỗ, thành công thì đóng popup và tải lại dữ liệu.
+ * Khi lỗi: giữ nguyên mọi ô đã nhập, chỉ tô đỏ + hiện lời nhắn ở đúng ô sai (nếu máy chủ chỉ ra ô).
+ */
 export function ActionForm({
   action, children, submitLabel = "Lưu", danger, className, keepOpen,
 }: { action: FormAction; children: React.ReactNode; submitLabel?: string; danger?: boolean; className?: string; keepOpen?: boolean }) {
   const [state, run, pending] = useActionState(action, { ok: false });
+  const submit = useKeepValuesSubmit(run);
   const close = useCloseModal();
   const router = useRouter();
+  const form = useRef<HTMLFormElement>(null);
   const handled = useRef<ActionResult | null>(null);
+  const [bad, setBad] = useState<string | undefined>();
+  const [inline, setInline] = useState(false);
   useEffect(() => {
     if (state.ok && handled.current !== state) {
       handled.current = state;
       router.refresh();
-      if (!keepOpen) close();
+      if (keepOpen) form.current?.reset();
+      else close();
     }
   }, [state, close, router, keepOpen]);
+  // Lỗi mới từ máy chủ: đánh dấu ô sai, đưa con trỏ tới ô đó.
+  useEffect(() => {
+    const f = form.current;
+    if (!f) return;
+    f.querySelectorAll("[data-bad]").forEach((el) => { el.removeAttribute("aria-invalid"); el.removeAttribute("data-bad"); });
+    const name = !state.ok ? state.field : undefined;
+    setBad(name);
+    if (!name) return;
+    const found = f.elements.namedItem(name);
+    const el = found instanceof RadioNodeList ? (found[0] as HTMLElement | undefined) : (found as HTMLElement | null);
+    if (!el) return;
+    el.setAttribute("aria-invalid", "true");
+    el.setAttribute("data-bad", "");
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    el.focus({ preventScroll: true });
+  }, [state]);
+  useLayoutEffect(() => { setInline(!!bad && !!form.current?.querySelector(`[data-field-error="${CSS.escape(bad)}"]`)); }, [bad]);
+  // Sửa lại ô sai thì bỏ đánh dấu.
+  const onInput = (e: React.FormEvent<HTMLFormElement>) => {
+    const t = e.target as HTMLInputElement;
+    if (bad && t.name === bad) {
+      t.removeAttribute("aria-invalid"); t.removeAttribute("data-bad");
+      setBad(undefined);
+    }
+  };
   return (
-    <form action={run} className={clsx("space-y-4", className)}>
-      {children}
-      {state.error && <div className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{state.error}</div>}
+    <form ref={form} onSubmit={submit} onInput={onInput} onChange={onInput} className={clsx("space-y-4", className)}>
+      <FieldErrCtx.Provider value={{ field: bad, error: state.error }}>{children}</FieldErrCtx.Provider>
+      {state.error && !(bad && inline) && (!state.field || bad) && <div className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{state.error}</div>}
       {state.ok && state.message && <div className="rounded-xl bg-green-50 px-3 py-2 text-sm text-green-700">{state.message}</div>}
       <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
         <button type="button" className="btn" onClick={close}>Hủy</button>
@@ -137,12 +182,16 @@ export function RowMenu({ children, label }: { children: React.ReactNode; label?
 
 /* ---------- Ô nhập liệu dùng chung ---------- */
 
-export function Field({ label, hint, children, className }: { label: string; hint?: string; children: React.ReactNode; className?: string }) {
+export function Field({ label, hint, children, className, name }: { label: string; hint?: string; children: React.ReactNode; className?: string; name?: string }) {
+  const err = useContext(FieldErrCtx);
+  const own = name ?? (isValidElement<{ name?: string }>(children) ? children.props.name : undefined);
+  const show = !!own && err.field === own && err.error;
   return (
     <label className={clsx("block", className)}>
       <span className="mb-1 block text-sm font-medium text-slate-700">{label}</span>
       {children}
-      {hint && <span className="mt-1 block text-xs text-slate-400">{hint}</span>}
+      {show ? <span data-field-error={own} className="mt-1 block text-xs font-semibold text-rose-600">{err.error}</span>
+        : hint && <span className="mt-1 block text-xs text-slate-400">{hint}</span>}
     </label>
   );
 }

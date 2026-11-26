@@ -7,3 +7,4 @@
 - 2026-11-19: Học phí / Công nợ / Báo cáo theo ảnh mẫu, SĐT riêng của học viên, xuất Excel (3ec169e). Đẩy lên GitHub.
 - 2026-11-26: Áp dụng kinh nghiệm app mẫu: CLAUDE.md, NHATKY.md, capnhat.sh (pm2), DB_PORT/APP_PORT, .env.example không giá trị thật, .gitignore an toàn.
 - 2026-11-26: Sửa giao diện: icon mắt mật khẩu, báo tài khoản bị khóa, báo trùng tên đăng nhập, giới hạn Họ tên 60 ký tự, tài liệu giáo trình (upload/link), cột Học phí ở Học viên (Chưa đóng/Còn nợ/Đã đóng đủ), ô số tiền thu tự định dạng và không vượt số cần đóng.
+- 2026-11-26: Form popup giữ nguyên dữ liệu khi lỗi, chỉ tô đỏ + báo ở đúng ô sai; ô tiền (MoneyInput) cảnh báo số âm, tự thêm dấu chấm; máy chủ chặn số âm (int).

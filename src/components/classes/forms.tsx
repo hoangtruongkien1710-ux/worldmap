@@ -1,6 +1,7 @@
 import { Field, Grid } from "@/components/ui/modal";
 import { money } from "@/lib/money";
 import { todayVN, toDay, WEEKDAY_LONG } from "@/lib/dates";
+import { MoneyInput } from "@/components/ui/money-input";
 
 export type ClassOptions = {
   courses: { id: string; code: string; name: string; listedPrice: number; priceUnit: string; program: { name: string } }[];
@@ -58,7 +59,7 @@ export function ClassFields({ o, c }: { o: ClassOptions; c?: ClassValue }) {
         <Field label="Sĩ số tối đa"><input type="number" min={1} name="maxStudents" defaultValue={c?.maxStudents ?? ""} className="input" /></Field>
       </Grid>
       <Grid>
-        <Field label="Học phí (đ)" hint="Bỏ trống = giá niêm yết của khóa"><input inputMode="numeric" name="unitPrice" defaultValue={c?.unitPrice ?? ""} className="input" /></Field>
+        <Field label="Học phí (đ)" hint="Bỏ trống = giá niêm yết của khóa"><MoneyInput name="unitPrice" defaultValue={c?.unitPrice} label="Học phí" /></Field>
         <Field label="Màu lớp" hint="Bỏ trống = màu chương trình"><input type="color" name="color" defaultValue={c?.color ?? "#2463eb"} className="input h-[42px] p-1" /></Field>
       </Grid>
       <div>

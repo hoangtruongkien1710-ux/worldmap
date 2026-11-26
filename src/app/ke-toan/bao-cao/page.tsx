@@ -12,6 +12,7 @@ import { AGE_BUCKETS, dailyCash, debtReport, expenseReport, incomeReport, payrol
 import { addDays, fmtDate, mondayOf, todayVN, weekday, WEEKDAY_LONG } from "@/lib/dates";
 import { money } from "@/lib/money";
 import { saveCashCount } from "@/lib/actions/cash";
+import { MoneyInput } from "@/components/ui/money-input";
 
 export const metadata = { title: "Báo cáo kế toán" };
 export const dynamic = "force-dynamic";
@@ -144,7 +145,7 @@ async function DailyCash({ day, today, post }: { day: string; today: string; pos
                         {post && (
                           <ModalButton variant="link" className="print:hidden" label={r.count ? "Sửa" : "Kiểm quỹ"} title={`Kiểm quỹ ${fmtDate(day)}`} subtitle={`${r.account.name} · tồn theo sổ ${money(r.closing)}`} size="sm">
                             <ActionForm action={saveCashCount.bind(null, r.account.id, day)}>
-                              <Field label="Số tiền đếm được (đ)"><input name="counted" inputMode="numeric" required defaultValue={(r.count?.counted ?? r.closing).toLocaleString("vi-VN")} className="input" /></Field>
+                              <Field label="Số tiền đếm được (đ)"><MoneyInput name="counted" required defaultValue={Math.max(0, r.count?.counted ?? r.closing)} /></Field>
                               <Field label="Ghi chú"><input name="note" defaultValue={r.count?.note ?? ""} className="input" placeholder="Lý do chênh lệch (nếu có)" /></Field>
                             </ActionForm>
                           </ModalButton>

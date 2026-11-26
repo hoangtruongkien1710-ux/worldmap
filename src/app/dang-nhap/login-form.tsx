@@ -3,13 +3,15 @@
 import { useActionState } from "react";
 import { LogIn } from "lucide-react";
 import { PasswordInput } from "@/components/ui/password-input";
+import { useKeepValuesSubmit } from "@/components/ui/modal";
 import { loginAction, type LoginState } from "./actions";
 
 export function LoginForm() {
   const [state, action, pending] = useActionState<LoginState, FormData>(loginAction, {});
+  const submit = useKeepValuesSubmit(action);
   // Form gửi bằng POST qua Server Action: mật khẩu không bao giờ nằm trên URL.
   return (
-    <form action={action} method="post" className="space-y-4">
+    <form action={action} onSubmit={submit} method="post" className="space-y-4">
       <label className="block text-sm font-semibold">
         Tài khoản
         <input name="username" autoComplete="username" required className="input mt-1.5" placeholder="Tên đăng nhập" />

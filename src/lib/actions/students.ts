@@ -12,9 +12,9 @@ const PATHS = ["/hoc-sinh", "/lop-hoc", "/hoc-phi", "/cong-no", "/"];
 function readStudent(f: FormData) {
   const parentPhone = opt(f, "parentPhone");
   const phone = opt(f, "phone");
-  for (const v of [parentPhone, phone]) if (v && !/^0\d{9,10}$/.test(v.replace(/\s/g, ""))) throw new UserError("Số điện thoại phải có 10–11 chữ số, bắt đầu bằng 0.");
+  for (const [k, v] of [["parentPhone", parentPhone], ["phone", phone]] as const) if (v && !/^0\d{9,10}$/.test(v.replace(/\s/g, ""))) throw new UserError("Số điện thoại phải có 10–11 chữ số, bắt đầu bằng 0.", k);
   return {
-    fullName: (() => { const n = req(f, "fullName", "họ tên"); if (n.length > 60) throw new UserError("Họ tên tối đa 60 ký tự."); return n; })(),
+    fullName: (() => { const n = req(f, "fullName", "họ tên"); if (n.length > 60) throw new UserError("Họ tên tối đa 60 ký tự.", "fullName"); return n; })(),
     gradeId: int(f, "gradeId"),
     school: opt(f, "school"),
     parentName: opt(f, "parentName"),
@@ -101,7 +101,7 @@ export async function updateEnrollment(enrollmentId: string, _: ActionResult, f:
     const user = await requirePermission("class.manage");
     const status = str(f, "status") === "LEFT" ? "LEFT" : "ACTIVE";
     const pct = int(f, "percentDiscount") ?? 0;
-    if (pct < 0 || pct > 100) throw new UserError("Ưu đãi phải từ 0 đến 100%.");
+    if (pct < 0 || pct > 100) throw new UserError("Ưu đãi phải từ 0 đến 100%.", "percentDiscount");
     await db.enrollment.update({
       where: { id: enrollmentId },
       data: {

@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { todayVN } from "@/lib/dates";
 import { createTransfer, createVoucher, voidVoucher } from "@/lib/actions/cash";
 import type { BookRow } from "./ui";
+import { MoneyInput } from "@/components/ui/money-input";
 
 type Account = { id: string; name: string; kind: "CASH" | "BANK" };
 
@@ -19,7 +20,7 @@ export async function VoucherButtons({ account }: { account: Account }) {
     <ActionForm action={createVoucher.bind(null, account.id, type)} submitLabel="Lập phiếu">
       <Grid>
         <Field label="Ngày chứng từ"><input type="date" name="date" defaultValue={todayVN()} required className="input" /></Field>
-        <Field label="Số tiền (đ)"><input name="amount" inputMode="numeric" required className="input" placeholder="VD: 1.500.000" /></Field>
+        <Field label="Số tiền (đ)"><MoneyInput name="amount" required placeholder="VD: 1.500.000" /></Field>
       </Grid>
       <Field label="Khoản mục">
         <select name="categoryId" required defaultValue="" className="input">
@@ -56,7 +57,7 @@ export async function VoucherButtons({ account }: { account: Account }) {
           </Field>
           <Grid>
             <Field label="Ngày"><input type="date" name="date" defaultValue={todayVN()} required className="input" /></Field>
-            <Field label="Số tiền (đ)"><input name="amount" inputMode="numeric" required className="input" /></Field>
+            <Field label="Số tiền (đ)"><MoneyInput name="amount" required /></Field>
           </Grid>
           <Field label="Diễn giải"><input name="description" required className="input" defaultValue={bank ? "Rút tiền gửi về quỹ" : "Nộp tiền mặt vào tài khoản"} /></Field>
         </ActionForm>

@@ -72,7 +72,7 @@ export async function addSession(classIdArg: string | null, _: ActionResult, f: 
     const date = day(f, "date", "ngày học");
     const startTime = time(f, "startTime", "bắt đầu");
     const endTime = time(f, "endTime", "kết thúc");
-    if (endTime <= startTime) throw new UserError("Giờ kết thúc phải sau giờ bắt đầu.");
+    if (endTime <= startTime) throw new UserError("Giờ kết thúc phải sau giờ bắt đầu.", "endTime");
     const source = str(f, "source") === "MANUAL" ? "MANUAL" : "MAKEUP";
     const clash = await db.session.findFirst({ where: { classId, date: toDate(date), startTime } });
     if (clash) throw new UserError("Lớp đã có buổi học vào giờ này.");

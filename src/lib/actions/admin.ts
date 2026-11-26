@@ -13,18 +13,18 @@ const UPATHS = ["/nguoi-dung", "/lop-hoc"];
 
 function readRole(f: FormData) {
   const r = str(f, "role");
-  if (!ROLES.includes(r as (typeof ROLES)[number])) throw new UserError("Chọn vai trò.");
+  if (!ROLES.includes(r as (typeof ROLES)[number])) throw new UserError("Chọn vai trò.", "role");
   return r as (typeof ROLES)[number];
 }
 function checkPassword(p: string) {
-  if (p.length < 8) throw new UserError("Mật khẩu cần ít nhất 8 ký tự.");
+  if (p.length < 8) throw new UserError("Mật khẩu cần ít nhất 8 ký tự.", "password");
   return p;
 }
 
 const NAME_MAX = 60;
 function readName(f: FormData) {
   const n = req(f, "fullName", "họ tên");
-  if (n.length > NAME_MAX) throw new UserError(`Họ tên tối đa ${NAME_MAX} ký tự.`);
+  if (n.length > NAME_MAX) throw new UserError(`Họ tên tối đa ${NAME_MAX} ký tự.`, "fullName");
   return n;
 }
 
@@ -32,8 +32,8 @@ export async function createUser(_: ActionResult, f: FormData) {
   return run(async () => {
     const me = await requirePermission("user.manage");
     const username = req(f, "username", "tên đăng nhập").toLowerCase();
-    if (!/^[a-z0-9._-]{3,30}$/.test(username)) throw new UserError("Tên đăng nhập chỉ gồm chữ không dấu, số, dấu chấm, gạch (3–30 ký tự).");
-    if (await db.user.findUnique({ where: { username }, select: { id: true } })) throw new UserError(`Tên đăng nhập “${username}” đã tồn tại, hãy chọn tên khác.`);
+    if (!/^[a-z0-9._-]{3,30}$/.test(username)) throw new UserError("Tên đăng nhập chỉ gồm chữ không dấu, số, dấu chấm, gạch (3–30 ký tự).", "username");
+    if (await db.user.findUnique({ where: { username }, select: { id: true } })) throw new UserError(`Tên đăng nhập “${username}” đã tồn tại, hãy chọn tên khác.`, "username");
     const password = checkPassword(str(f, "password"));
     const branch = await db.branch.findFirst();
     const u = await db.user.create({
@@ -69,7 +69,7 @@ export async function resetPassword(userId: string, _: ActionResult, f: FormData
   return run(async () => {
     const me = await requirePermission("user.manage");
     const p = checkPassword(str(f, "password"));
-    if (p !== str(f, "password2")) throw new UserError("Hai lần nhập mật khẩu không khớp.");
+    if (p !== str(f, "password2")) throw new UserError("Hai lần nhập mật khẩu không khớp.", "password2");
     await db.user.update({ where: { id: userId }, data: { passwordHash: await bcrypt.hash(p, 10) } });
     await audit(me.id, "reset-password", "User", userId);
     return "Đã đặt lại mật khẩu.";

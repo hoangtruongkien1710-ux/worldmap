@@ -9,7 +9,7 @@ const PATHS = ["/lop-hoc"];
 
 function readCourse(f: FormData) {
   const listedPrice = int(f, "listedPrice", "học phí");
-  if (!listedPrice || listedPrice <= 0) throw new UserError("Nhập học phí niêm yết.");
+  if (!listedPrice || listedPrice <= 0) throw new UserError("Nhập học phí niêm yết.", "listedPrice");
   const hours = str(f, "sessionHours").replace(",", ".");
   return {
     programId: req(f, "programId", "chương trình"),

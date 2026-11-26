@@ -1,4 +1,5 @@
 import { Field, Grid } from "@/components/ui/modal";
+import { MoneyInput } from "@/components/ui/money-input";
 
 type CourseValue = {
   programId: string; code: string; name: string; level: string | null; target: string | null; description: string | null;
@@ -26,7 +27,7 @@ export function CourseFields({ programs, c }: { programs: { id: string; name: st
       </Grid>
       <Field label="Mô tả"><input name="description" defaultValue={c?.description ?? ""} className="input" /></Field>
       <Grid cols={3}>
-        <Field label="Học phí niêm yết (đ)"><input name="listedPrice" inputMode="numeric" defaultValue={c ? c.listedPrice.toLocaleString("vi-VN") : ""} required className="input" /></Field>
+        <Field label="Học phí niêm yết (đ)"><MoneyInput name="listedPrice" defaultValue={c?.listedPrice} required label="Học phí" /></Field>
         <Field label="Tính theo">
           <select name="priceUnit" defaultValue={c?.priceUnit ?? "COURSE"} className="input">
             <option value="COURSE">Trọn khóa</option><option value="SESSION">Theo buổi (1-1)</option>

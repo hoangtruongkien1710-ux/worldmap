@@ -16,7 +16,7 @@ export async function createVoucher(accountId: string, type: "IN" | "OUT", _: Ac
   return run(async () => {
     const user = await requirePermission("accounting.post");
     const amount = int(f, "amount", "số tiền");
-    if (!amount || amount <= 0) throw new UserError("Số tiền phải lớn hơn 0.");
+    if (!amount || amount <= 0) throw new UserError("Số tiền phải lớn hơn 0.", "amount");
     const categoryId = int(f, "categoryId", "khoản mục");
     const cat = await db.txnCategory.findUniqueOrThrow({ where: { id: categoryId! } });
     if (cat.code === "THU_HP") throw new UserError("Thu học phí hãy làm ở tab Học phí của lớp để gắn đúng học viên.");
@@ -41,9 +41,9 @@ export async function createTransfer(fromId: string, _: ActionResult, f: FormDat
   return run(async () => {
     const user = await requirePermission("accounting.post");
     const toId = req(f, "toAccountId", "tài khoản nhận");
-    if (toId === fromId) throw new UserError("Tài khoản nhận phải khác tài khoản chuyển.");
+    if (toId === fromId) throw new UserError("Tài khoản nhận phải khác tài khoản chuyển.", "toId");
     const amount = int(f, "amount", "số tiền");
-    if (!amount || amount <= 0) throw new UserError("Số tiền phải lớn hơn 0.");
+    if (!amount || amount <= 0) throw new UserError("Số tiền phải lớn hơn 0.", "amount");
     const d = day(f, "date", "ngày chứng từ");
     const description = req(f, "description", "diễn giải");
     const code = await db.$transaction(async (tx) => {
@@ -84,10 +84,10 @@ export async function createPayable(_: ActionResult, f: FormData) {
     const cat = await db.txnCategory.findUniqueOrThrow({ where: { id: categoryId } });
     if (!cat.debitAccount || cat.direction !== "OUT") throw new UserError("Chọn khoản mục chi.");
     const amount = int(f, "amount", "số tiền");
-    if (!amount || amount <= 0) throw new UserError("Số tiền phải lớn hơn 0.");
+    if (!amount || amount <= 0) throw new UserError("Số tiền phải lớn hơn 0.", "amount");
     const billDate = day(f, "billDate", "ngày hóa đơn");
     const dueDate = day(f, "dueDate", "hạn trả");
-    if (dueDate < billDate) throw new UserError("Hạn trả phải sau ngày hóa đơn.");
+    if (dueDate < billDate) throw new UserError("Hạn trả phải sau ngày hóa đơn.", "dueDate");
     const description = req(f, "description", "diễn giải");
     const code = await db.$transaction(async (tx) => {
       const prefix = `MH${billDate.slice(2, 4)}${billDate.slice(5, 7)}-`;
@@ -113,8 +113,8 @@ export async function payPayable(payableId: string, _: ActionResult, f: FormData
     const paid = await db.cashTxn.aggregate({ where: { payableId, voidedAt: null }, _sum: { amount: true } });
     const remain = p.amount - (paid._sum.amount ?? 0);
     const amount = int(f, "amount", "số tiền");
-    if (!amount || amount <= 0) throw new UserError("Số tiền phải lớn hơn 0.");
-    if (amount > remain) throw new UserError("Số tiền vượt quá số còn nợ.");
+    if (!amount || amount <= 0) throw new UserError("Số tiền phải lớn hơn 0.", "amount");
+    if (amount > remain) throw new UserError("Số tiền vượt quá số còn nợ.", "amount");
     const ncc = await db.txnCategory.findUniqueOrThrow({ where: { code: "CHI_NCC" } });
     const txn = await db.$transaction((tx) =>
       createCashTxn(tx, {
@@ -161,7 +161,7 @@ export async function saveCashAccount(id: string | null, _: ActionResult, f: For
       await db.cashAccount.update({ where: { id }, data: { ...data, active: f.get("active") === "on" } });
     } else {
       await db.cashAccount.create({
-        data: { ...data, kind, code: req(f, "code", "mã").toUpperCase(), ledgerCode: kind === "BANK" ? "1121" : "1111", openingBalance: int(f, "openingBalance") ?? 0, openingDate: toDate(day(f, "openingDate", "ngày số dư đầu")) },
+        data: { ...data, kind, code: req(f, "code", "mã").toUpperCase(), ledgerCode: kind === "BANK" ? "1121" : "1111", openingBalance: int(f, "openingBalance", undefined, true) ?? 0, openingDate: toDate(day(f, "openingDate", "ngày số dư đầu")) },
       });
     }
     await audit(user.id, id ? "update" : "create", "CashAccount", id ?? undefined);
@@ -218,7 +218,7 @@ export async function saveCashCount(accountId: string, d: string, _: ActionResul
   return run(async () => {
     const user = await requirePermission("accounting.post");
     const counted = int(f, "counted", "số tiền đếm được");
-    if (counted === null || counted < 0) throw new UserError("Nhập số tiền đếm được.");
+    if (counted === null || counted < 0) throw new UserError("Nhập số tiền đếm được.", "counted");
     const note = opt(f, "note");
     await db.cashCount.upsert({ where: { accountId_date: { accountId, date: toDate(d) } }, update: { counted, note }, create: { accountId, date: toDate(d), counted, note } });
     await audit(user.id, "count", "CashAccount", accountId, { day: d, counted });
