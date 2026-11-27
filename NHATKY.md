@@ -14,3 +14,4 @@
 - 2026-11-27: Nhập bảng lương: bỏ qua dòng TỔNG CỘNG của file (app tự tính tổng).
 - 2026-11-27: Tiền lương: trang Hồ sơ nhân sự (lọc tên/bộ phận/trạng thái), chi tiết từng người (lịch sử lương chính tăng/giảm, ngày công, buổi dạy theo tháng/năm, xuất Excel, sửa thông tin); tên ở bảng lương bấm vào hồ sơ.
 - 2026-11-27: Nhân sự: bỏ chữ "chi phí" ở ô Bộ phận, thêm bộ phận mới ngay trong popup (bảng Department; chọn hạch toán 632/6422), lọc/báo cáo/chốt lương theo bộ phận.
+- 2026-11-27: Nút In ở mọi trang (PageHeader): xem trước khi in (khổ A4 ngang/dọc), ẩn menu/nút/bộ lọc, bảng không còn thanh cuộn, có dòng ngày in.

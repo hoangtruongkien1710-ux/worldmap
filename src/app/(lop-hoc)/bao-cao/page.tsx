@@ -2,7 +2,6 @@ import Link from "next/link";
 import clsx from "clsx";
 import { BarChart3, CalendarCheck, CircleCheck, ClipboardX, GraduationCap, HandCoins, LineChart as LineIcon, Presentation, Receipt, School, UserMinus, UserPlus, Users, Wallet } from "lucide-react";
 import { PageHeader } from "@/components/layout/app-shell";
-import { PrintButton } from "@/components/accounting/print-button";
 import { ExcelLink, MonthNav, Trend } from "@/components/tuition/ui";
 import { GroupedBars, LineChart, RateBar } from "@/components/reports/charts";
 import { Phones } from "@/components/students/phones";
@@ -46,7 +45,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ t
   return (
     <>
       <PageHeader title="Báo cáo" subtitle={`So sánh tháng ${mLabel(month)} với tháng ${mLabel(r.prevMonth)}`}
-        actions={<><MonthNav month={month} href={(m) => href({ thang: m })} /><PrintButton /><ExcelLink href={`/bao-cao/xuat?thang=${month}`} /></>} />
+        actions={<><MonthNav month={month} href={(m) => href({ thang: m })} /><ExcelLink href={`/bao-cao/xuat?thang=${month}`} /></>} />
 
       <nav className="mb-5 flex gap-2 overflow-x-auto print:hidden">
         {TABS.map((t) => (

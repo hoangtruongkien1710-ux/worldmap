@@ -22,3 +22,36 @@ html, body { background: #f5f7fb; color: #15213a; }
 .input { @apply w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-100; }
 .input[aria-invalid="true"] { @apply border-rose-500 bg-rose-50/40 ring-4 ring-rose-100; }
 .badge { @apply inline-flex items-center rounded-lg px-2 py-0.5 text-xs font-semibold; }
+
+/* ---------- In ấn: html.pv = chế độ giấy (xem trước hoặc đang in) ---------- */
+.pv aside, .pv header, .pv .btn, .pv dialog, .pv .print\:hidden, .pv [data-noprint], .pv select, .pv form[action] { display: none !important; }
+.pv .pv-toolbar, .pv .pv-toolbar * { display: revert !important; }
+.pv .pv-toolbar { display: flex !important; }
+.pv [data-shell] { padding-left: 0 !important; }
+.pv [data-main] { max-width: none !important; padding: 0 !important; }
+.pv [data-main]::before { content: var(--printed); display: block; margin-bottom: 6px; font-size: 11px; color: #64748b; }
+.pv .overflow-auto, .pv .overflow-x-auto, .pv .overflow-y-auto, .pv .overflow-hidden { overflow: visible !important; max-height: none !important; }
+.pv .sticky { position: static !important; }
+.pv table { min-width: 0 !important; width: 100% !important; font-size: 9px; }
+.pv .card .px-3, .pv .card .px-4 { padding-left: 3px !important; padding-right: 3px !important; }
+.pv th, .pv td { padding: 3px 4px !important; letter-spacing: normal; }
+.pv th svg { display: none; }
+.pv table th, .pv table td, .pv table td * { font-size: 9px !important; }
+.pv .min-w-\[180px\] { min-width: 0 !important; }
+.pv .card { box-shadow: none !important; break-inside: avoid-page; }
+.pv tr { break-inside: avoid; }
+.pv thead { display: table-header-group; }
+.pv, .pv body { background: #fff !important; }
+.pv * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.pv .truncate { overflow: visible !important; text-overflow: clip !important; white-space: normal !important; }
+
+/* Màn hình xem trước: tờ giấy nổi trên nền xám */
+html.pv-preview, html.pv-preview body { background: #cbd5e1 !important; }
+html.pv-preview [data-main] { background: #fff; margin: 64px auto 32px; padding: 10mm !important; box-shadow: 0 6px 30px rgba(15, 23, 42, .25); box-sizing: border-box; }
+html.pv-preview[data-orient="landscape"] [data-main] { width: 297mm; max-width: calc(100vw - 24px) !important; }
+html.pv-preview[data-orient="portrait"] [data-main] { width: 210mm; max-width: calc(100vw - 24px) !important; }
+@media print {
+  .pv-toolbar { display: none !important; }
+  html.pv-preview, html.pv-preview body { background: #fff !important; }
+  html.pv-preview [data-main] { margin: 0; padding: 0 !important; box-shadow: none; width: auto !important; max-width: none !important; }
+}

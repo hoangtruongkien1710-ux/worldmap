@@ -44,7 +44,7 @@ export function StatCard({ icon, label, value, hint, tone }: { icon: React.React
 
 export function Tabs({ items }: { items: { href: string; label: string; active: boolean }[] }) {
   return (
-    <div className="flex flex-wrap gap-2">
+    <div data-noprint className="flex flex-wrap gap-2">
       {items.map((i) => (
         <Link key={i.href} href={i.href} className={clsx("rounded-xl px-4 py-2 text-sm font-semibold transition",
           i.active ? "bg-acc-600 text-white shadow-md shadow-acc-600/25" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50")}>

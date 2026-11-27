@@ -3,7 +3,6 @@ import clsx from "clsx";
 import { AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarClock, ChevronLeft, ChevronRight, ClipboardCheck, HandCoins, PiggyBank, Receipt, TrendingUp, Users, Wallet } from "lucide-react";
 import { PageHeader } from "@/components/layout/app-shell";
 import { MonthNav, StatCard, VoucherBadge, monthLabel } from "@/components/accounting/ui";
-import { PrintButton } from "@/components/accounting/print-button";
 import { ActionForm, Field, ModalButton } from "@/components/ui/modal";
 import { guardPage } from "@/lib/auth/session";
 import { can } from "@/lib/auth/permissions";
@@ -43,7 +42,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<SP>
 
   return (
     <>
-      <PageHeader title="Báo cáo kế toán" subtitle={`${cur.label} · ${cur.freq.toLowerCase()} · số liệu lấy từ chứng từ và sổ cái`} actions={<PrintButton />} />
+      <PageHeader title="Báo cáo kế toán" subtitle={`${cur.label} · ${cur.freq.toLowerCase()} · số liệu lấy từ chứng từ và sổ cái`} />
       <nav className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6 print:hidden">
         {REPORTS.map((r) => (
           <Link key={r.key} href={`/ke-toan/bao-cao?bc=${r.key}`} className={clsx("flex items-center gap-2.5 rounded-xl px-3 py-2.5 ring-1 transition",

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { PrintButton, usePrintMode } from "@/components/accounting/print-button";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import clsx from "clsx";
@@ -30,6 +31,7 @@ type Props = {
 
 export function AppShell({ workspace, nav, brand, user, switchTo, signOutAction, children }: Props) {
   const pathname = usePathname();
+  usePrintMode();
   const [open, setOpen] = useState(false);
   const accounting = workspace === "accounting";
   const isActive = (href: string) =>
@@ -37,7 +39,7 @@ export function AppShell({ workspace, nav, brand, user, switchTo, signOutAction,
   const initials = user.fullName.split(" ").filter(Boolean).map((w) => w[0]).slice(-2).join("").toUpperCase();
 
   return (
-    <div className="min-h-screen overflow-x-clip lg:pl-64">
+    <div data-shell className="min-h-screen overflow-x-clip lg:pl-64">
       {open && <div className="fixed inset-0 z-30 bg-slate-900/30 lg:hidden" onClick={() => setOpen(false)} />}
       <aside
         className={clsx(
@@ -112,7 +114,7 @@ export function AppShell({ workspace, nav, brand, user, switchTo, signOutAction,
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-[1400px] p-4 lg:p-8">{children}</main>
+      <main data-main className="mx-auto max-w-[1400px] p-4 lg:p-8">{children}</main>
     </div>
   );
 }
@@ -124,7 +126,7 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
         <h1 className="text-2xl font-extrabold tracking-tight lg:text-3xl">{title}</h1>
         {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
       </div>
-      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+      <div className="flex flex-wrap gap-2">{actions}<PrintButton /></div>
     </div>
   );
 }
