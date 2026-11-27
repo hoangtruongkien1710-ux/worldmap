@@ -1,77 +1,112 @@
 import Link from "next/link";
-import { CircleCheck, HandCoins, Receipt } from "lucide-react";
+import clsx from "clsx";
+import { ChevronRight, CircleCheck, HandCoins, Receipt } from "lucide-react";
 import { PageHeader } from "@/components/layout/app-shell";
 import { StatCard, Tabs } from "@/components/accounting/ui";
+import { PeriodBar, SearchForm, qs } from "@/components/accounting/period-bar";
+import { SortTh } from "@/components/ui/sort-th";
 import { db } from "@/lib/db";
 import { guardPage } from "@/lib/auth/session";
 import { fmtDate } from "@/lib/dates";
 import { money } from "@/lib/money";
+import { monthsIn, pickPeriod, type PeriodSP } from "@/lib/accounting/period";
+import { parseSort, sortRows } from "@/lib/sort";
 
 export const metadata = { title: "Học phí & thu khác" };
 export const dynamic = "force-dynamic";
 
 type Item = { className: string; amount: number; discount: number; note?: string };
+type SP = PeriodSP & { tt?: string; q?: string; xep?: string; chieu?: string };
+const BASE = "/ke-toan/hoc-phi";
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ tt?: string }> }) {
+export default async function Page({ searchParams }: { searchParams: Promise<SP> }) {
   await guardPage("accounting.view");
-  const filter = (await searchParams).tt === "con-no" ? "debt" : (await searchParams).tt === "da-du" ? "paid" : "all";
+  const sp = await searchParams;
+  const period = pickPeriod(sp, { defaultKey: "tatca" });
+  const filter = sp.tt === "con-no" ? "debt" : sp.tt === "da-du" ? "paid" : "all";
+  const m = monthsIn(period);
+  const q = sp.q?.trim().toLowerCase();
   const invoices = await db.invoice.findMany({
+    where: period.key === "tatca" ? {} : { month: { gte: m.from, lte: m.to } },
     include: { student: true, payments: { where: { voidedAt: null }, orderBy: { paidAt: "asc" } } },
-    orderBy: [{ month: "desc" }, { createdAt: "asc" }],
+    orderBy: [{ month: "desc" }, { createdAt: "desc" }],
   });
-  const rows = invoices.map((i) => {
-    const total = i.lockedAmount ?? 0;
-    const paid = i.payments.reduce((s, p) => s + p.amount, 0);
-    return { ...i, total, paid, remain: total - paid, items: (i.lockedDetail ?? []) as Item[] };
+  const all = invoices
+    .filter((i) => !q || [i.student.fullName, i.student.code, i.student.phone, i.student.parentPhone, i.student.parentName].some((v) => v?.toLowerCase().includes(q)))
+    .map((i) => {
+      const total = i.lockedAmount ?? 0;
+      const paid = i.payments.reduce((s, p) => s + p.amount, 0);
+      const items = (i.lockedDetail ?? []) as Item[];
+      return { ...i, total, paid, remain: total - paid, items, classes: items.map((x) => x.className).join(", "), lastPaid: i.payments.at(-1)?.paidAt ?? null };
+    });
+  const sum = (f: (r: (typeof all)[number]) => number) => all.reduce((s, r) => s + f(r), 0);
+  const sort = parseSort(sp, ["hv", "thang", "lop", "phaithu", "dathu", "thucuoi", "conlai"]);
+  // Mặc định: tháng học phí mới nhất trước, trong tháng thì lần thu gần nhất trước.
+  const base = all.filter((r) => (filter === "debt" ? r.remain > 0 : filter === "paid" ? r.remain <= 0 : true))
+    .sort((a, b) => b.month.localeCompare(a.month) || (b.lastPaid?.getTime() ?? 0) - (a.lastPaid?.getTime() ?? 0));
+  const shown = sortRows(base, sort, {
+    hv: (r) => r.student.fullName, thang: (r) => r.month, lop: (r) => r.classes, phaithu: (r) => r.total, dathu: (r) => r.paid, thucuoi: (r) => r.lastPaid, conlai: (r) => r.remain,
   });
-  const sum = (f: (r: (typeof rows)[number]) => number) => rows.reduce((s, r) => s + f(r), 0);
-  const shown = rows
-    .filter((r) => (filter === "debt" ? r.remain > 0 : filter === "paid" ? r.remain <= 0 : true))
-    .sort((a, b) => (filter === "debt" ? b.remain - a.remain : 0));
+  const th = (col: string, label: string, align?: "right") => <SortTh col={col} label={label} base={BASE} params={sp} sort={sort} align={align} className="px-3 py-3" />;
 
   return (
     <>
       <PageHeader title="Học phí & thu khác" subtitle="Học phí ghi nhận khi khai giảng; thu tiền mặt hoặc chuyển khoản theo từng đợt" />
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard tone="indigo" icon={<Receipt size={20} />} label="Học phí đã ghi nhận" value={money(sum((r) => r.total))} hint={`${rows.length} phiếu báo học phí`} />
-        <StatCard tone="emerald" icon={<CircleCheck size={20} />} label="Đã thu" value={money(sum((r) => r.paid))} hint={`${rows.filter((r) => r.remain <= 0).length} học viên đã đóng đủ`} />
-        <StatCard tone="rose" icon={<HandCoins size={20} />} label="Còn phải thu" value={money(sum((r) => Math.max(0, r.remain)))} hint={`${rows.filter((r) => r.remain > 0).length} học viên còn nợ`} />
+      <PeriodBar base={BASE} period={period} params={sp} allowAll />
+      <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <StatCard tone="indigo" icon={<Receipt size={20} />} label="Học phí đã ghi nhận" value={money(sum((r) => r.total))} hint={`${all.length} phiếu báo học phí · ${period.label}`} />
+        <StatCard tone="emerald" icon={<CircleCheck size={20} />} label="Đã thu" value={money(sum((r) => r.paid))} hint={`${all.filter((r) => r.remain <= 0).length} học viên đã đóng đủ`} />
+        <StatCard tone="rose" icon={<HandCoins size={20} />} label="Còn phải thu" value={money(sum((r) => Math.max(0, r.remain)))} hint={`${all.filter((r) => r.remain > 0).length} học viên còn nợ`} />
       </div>
-      <div className="mb-4">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <Tabs items={[
-          { href: "/ke-toan/hoc-phi", label: "Tất cả", active: filter === "all" },
-          { href: "/ke-toan/hoc-phi?tt=con-no", label: "Còn nợ", active: filter === "debt" },
-          { href: "/ke-toan/hoc-phi?tt=da-du", label: "Đã đóng đủ", active: filter === "paid" },
+          { href: `${BASE}${qs(sp, { tt: undefined })}`, label: "Tất cả", active: filter === "all" },
+          { href: `${BASE}${qs(sp, { tt: "con-no" })}`, label: "Còn nợ", active: filter === "debt" },
+          { href: `${BASE}${qs(sp, { tt: "da-du" })}`, label: "Đã đóng đủ", active: filter === "paid" },
         ]} />
+        <SearchForm base={BASE} params={sp} placeholder="Tên, mã học viên, SĐT" />
       </div>
       <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[860px] text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-              <tr><th className="px-4 py-3">Học viên</th><th className="px-3 py-3">Lớp / khóa</th><th className="px-3 py-3 text-right">Phải thu</th><th className="px-3 py-3">Các lần thu</th><th className="px-3 py-3 text-right">Đã thu</th><th className="px-4 py-3 text-right">Còn nợ</th></tr>
+        <div className="max-h-[70vh] overflow-auto">
+          <table className="w-full min-w-[900px] border-separate border-spacing-0 text-sm">
+            <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs">
+              <tr className="[&>th]:border-b [&>th]:border-slate-200">
+                {th("hv", "Học viên")}{th("thang", "Tháng")}{th("lop", "Lớp / khóa")}{th("phaithu", "Phải thu", "right")}
+                <th className="hidden px-3 py-3 text-xs font-medium uppercase tracking-wide text-slate-500 2xl:table-cell">Các lần thu</th>
+                {th("dathu", "Đã thu", "right")}{th("thucuoi", "Thu gần nhất")}{th("conlai", "Còn lại", "right")}<th className="w-10" />
+              </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="[&>tr:nth-child(even)]:bg-slate-50/50 [&>tr>td]:border-b [&>tr>td]:border-slate-100">
+              {shown.length === 0 && <tr><td colSpan={9} className="px-4 py-10 text-center text-slate-500">Không có phiếu học phí phù hợp.</td></tr>}
               {shown.map((r) => (
-                <tr key={r.id} className="align-top hover:bg-slate-50/60">
-                  <td className="px-4 py-3"><div className="font-semibold">{r.student.fullName}</div><div className="text-xs text-slate-500">{r.student.code} · {r.student.parentPhone ?? r.student.phone ?? ""}</div></td>
+                <tr key={r.id} className="align-top hover:bg-acc-50/40">
+                  <td className="min-w-44 px-4 py-3">
+                    <Link href={`${BASE}/${r.id}`} className="font-semibold hover:text-acc-700 hover:underline">{r.student.fullName}</Link>
+                    <div className="text-xs text-slate-500">{r.student.code} · {r.student.parentPhone ?? r.student.phone ?? ""}</div>
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-3 text-slate-600">{r.month.slice(5)}/{r.month.slice(0, 4)}</td>
                   <td className="px-3 py-3">{r.items.map((it, k) => (
                     <div key={k}>{it.className}{it.discount > 0 && <span className="ml-1 text-xs text-emerald-700">(giảm {money(it.discount)})</span>}</div>
                   ))}</td>
-                  <td className="whitespace-nowrap px-3 py-3 text-right font-semibold">{money(r.total)}</td>
-                  <td className="px-3 py-3 text-xs text-slate-600">
-                    {r.payments.length === 0 ? <span className="text-slate-400">Chưa thu</span> : r.payments.map((p) => (
+                  <td className="whitespace-nowrap border-l !border-l-slate-100 px-3 py-3 text-right font-semibold tabular-nums">{money(r.total)}</td>
+                  <td className="hidden px-3 py-3 text-xs text-slate-600 2xl:table-cell">
+                    {r.payments.length === 0 ? <span className="text-slate-400">Chưa thu</span> : [...r.payments].reverse().map((p) => (
                       <div key={p.id} className="whitespace-nowrap">{fmtDate(p.paidAt)} · {money(p.amount)} · {p.method === "CASH" ? "tiền mặt" : "chuyển khoản"}</div>
                     ))}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-3 text-right text-emerald-700">{money(r.paid)}</td>
-                  <td className="whitespace-nowrap px-4 py-3 text-right font-bold">{r.remain > 0 ? <span className="text-rose-600">{money(r.remain)}</span> : <span className="badge bg-green-50 text-green-700">Đã đủ</span>}</td>
+                  <td className="whitespace-nowrap bg-emerald-50/30 px-3 py-3 text-right tabular-nums text-emerald-700">{money(r.paid)}</td>
+                  <td className="whitespace-nowrap px-3 py-3 text-slate-600">{r.lastPaid ? fmtDate(r.lastPaid) : <span className="text-slate-300">—</span>}</td>
+                  <td className="whitespace-nowrap border-l !border-l-slate-100 px-4 py-3 text-right font-bold tabular-nums">
+                    {r.remain > 0 ? <span className={clsx("text-rose-600")}>{money(r.remain)}</span> : <span className="badge bg-green-50 text-green-700">Đã đủ</span>}
+                  </td>
+                  <td className="px-2 py-3"><Link href={`${BASE}/${r.id}`} aria-label="Xem chi tiết học phí" title="Xem chi tiết" className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-acc-700"><ChevronRight size={18} /></Link></td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </div>
-      <p className="mt-3 text-xs text-slate-400">Thu tiền mới làm ở màn <Link href="/hoc-phi" className="underline">Học phí</Link> bên Lớp học (giai đoạn 4); phiếu thu tự sang sổ quỹ / ngân hàng.</p>
+      <p className="mt-3 text-xs text-slate-400">Thu tiền mới làm ở màn <Link href="/hoc-phi" className="underline">Học phí</Link> bên Lớp học; phiếu thu tự sang sổ quỹ / ngân hàng. Bấm tên học viên để xem chi tiết và chứng từ liên quan.</p>
     </>
   );
 }

@@ -1,8 +1,9 @@
-import { ArrowLeftRight, ArrowDownCircle, ArrowUpCircle, XCircle } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeftRight, ArrowDownCircle, ArrowUpCircle, Pencil, XCircle } from "lucide-react";
 import { ActionForm, ConfirmButton, Field, Grid, ModalButton, RowMenu } from "@/components/ui/modal";
 import { db } from "@/lib/db";
 import { todayVN } from "@/lib/dates";
-import { createTransfer, createVoucher, voidVoucher } from "@/lib/actions/cash";
+import { createTransfer, createVoucher, updateVoucher, voidVoucher } from "@/lib/actions/cash";
 import type { BookRow } from "./ui";
 import { MoneyInput } from "@/components/ui/money-input";
 
@@ -66,15 +67,56 @@ export async function VoucherButtons({ account }: { account: Account }) {
   );
 }
 
-/** Menu ⋮ trên mỗi dòng sổ quỹ / sổ ngân hàng. */
-export function VoucherRowMenu(r: BookRow) {
+type Cat = { id: number; name: string; direction: string };
+type Sup = { id: string; name: string };
+
+/** Danh sách khoản mục / nhà cung cấp cho form sửa chứng từ (tải một lần cho cả bảng). */
+export async function loadVoucherLookups() {
+  const [cats, suppliers] = await Promise.all([
+    db.txnCategory.findMany({ where: { code: { not: "THU_HP" } }, orderBy: [{ direction: "asc" }, { order: "asc" }, { id: "asc" }] }),
+    db.supplier.findMany({ orderBy: { name: "asc" } }),
+  ]);
+  return { cats, suppliers };
+}
+
+/** Menu ⋮ trên mỗi dòng sổ quỹ / sổ ngân hàng: sửa, hủy. */
+export function VoucherRowMenu({ r, cats, suppliers }: { r: BookRow; cats: Cat[]; suppliers: Sup[] }) {
+  const amount = r.in || r.out;
   return (
     <RowMenu>
       {r.linked ? (
-        <div className="px-3 py-2 text-xs text-slate-500">Phiếu sinh từ {r.linked}. Hủy ở màn {r.linked === "Học phí" ? "Học phí của lớp" : r.linked}.</div>
+        <div className="px-3 py-2 text-xs text-slate-500">Phiếu sinh từ {r.linked}. {r.link && <Link href={r.link.href} className="font-semibold text-acc-700 underline">{r.link.label}</Link>}</div>
       ) : (
-        <ConfirmButton label="Hủy chứng từ" icon={<XCircle size={15} />} title={`Hủy ${r.code}?`} confirmLabel="Hủy chứng từ"
-          message={<>Chứng từ <b>{r.code}</b> ({r.description}) sẽ bị đánh dấu hủy và ghi bút toán đảo ngày hôm nay. Sổ cái vẫn giữ dấu vết.</>} action={voidVoucher.bind(null, r.id)} />
+        <>
+          <ModalButton variant="menu" label="Sửa chứng từ" icon={<Pencil size={15} />} title={`Sửa ${r.code}`} subtitle="Bút toán sẽ được ghi lại cho khớp">
+            <ActionForm action={updateVoucher.bind(null, r.id)}>
+              <Grid>
+                <Field label="Ngày chứng từ"><input type="date" name="date" defaultValue={r.date} required className="input" /></Field>
+                <Field label="Số tiền (đ)"><MoneyInput name="amount" defaultValue={amount} required /></Field>
+              </Grid>
+              {r.kind !== "TRANSFER" && (
+                <Field label="Khoản mục">
+                  <select name="categoryId" required defaultValue={r.categoryId ?? ""} className="input">
+                    {cats.filter((c) => c.direction === r.kind).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </Field>
+              )}
+              <Field label="Diễn giải"><input name="description" required defaultValue={r.description} className="input" /></Field>
+              {r.kind !== "TRANSFER" && (
+                <Grid>
+                  <Field label={r.kind === "IN" ? "Người nộp" : "Người nhận"}><input name="counterparty" defaultValue={r.counterparty ?? ""} className="input" /></Field>
+                  {r.kind === "OUT" && (
+                    <Field label="Nhà cung cấp">
+                      <select name="supplierId" defaultValue={r.supplierId ?? ""} className="input"><option value="">—</option>{suppliers.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
+                    </Field>
+                  )}
+                </Grid>
+              )}
+            </ActionForm>
+          </ModalButton>
+          <ConfirmButton label="Hủy chứng từ" icon={<XCircle size={15} />} title={`Hủy ${r.code}?`} confirmLabel="Hủy chứng từ"
+            message={<>Chứng từ <b>{r.code}</b> ({r.description}) sẽ bị đánh dấu hủy và ghi bút toán đảo ngày hôm nay. Sổ cái vẫn giữ dấu vết.</>} action={voidVoucher.bind(null, r.id)} />
+        </>
       )}
     </RowMenu>
   );

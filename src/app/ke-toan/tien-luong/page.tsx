@@ -5,6 +5,8 @@ import { db } from "@/lib/db";
 import { guardPage } from "@/lib/auth/session";
 import { fmtDate } from "@/lib/dates";
 import { money } from "@/lib/money";
+import { SortTh } from "@/components/ui/sort-th";
+import { parseSort, sortRows } from "@/lib/sort";
 
 export const metadata = { title: "Tiền lương" };
 export const dynamic = "force-dynamic";
@@ -15,13 +17,23 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   PAID: { label: "Đã trả lương", cls: "bg-green-50 text-green-700" },
 };
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ thang?: string }> }) {
+type SP = { thang?: string; xep?: string; chieu?: string };
+const BASE = "/ke-toan/tien-luong";
+
+export default async function Page({ searchParams }: { searchParams: Promise<SP> }) {
   await guardPage("payroll.view");
   const sp = await searchParams;
   const periods = await db.payrollPeriod.findMany({ orderBy: { month: "desc" } });
   const period = periods.find((p) => p.month === sp.thang) ?? periods[0];
   if (!period) return <PageHeader title="Tiền lương" subtitle="Chưa nhập bảng lương tháng nào" />;
-  const lines = await db.payrollLine.findMany({ where: { periodId: period.id }, include: { employee: true }, orderBy: { employee: { code: "asc" } } });
+  const params = { ...sp, thang: period.month };
+  const sort = parseSort(sp, ["ma", "ten", "cong", "buoi", "luong", "phucap", "thuong", "bhxh", "thue", "thuclinh"]);
+  const raw = await db.payrollLine.findMany({ where: { periodId: period.id }, include: { employee: true }, orderBy: { employee: { code: "asc" } } });
+  const lines = sortRows(raw, sort, {
+    ma: (l) => l.employee.code, ten: (l) => l.employee.fullName, cong: (l) => Number(l.workDays), buoi: (l) => l.teachingSessions, luong: (l) => l.baseSalary,
+    phucap: (l) => l.allowance, thuong: (l) => l.bonus, bhxh: (l) => l.insurance, thue: (l) => l.pit, thuclinh: (l) => l.netPay,
+  });
+  const th = (col: string, label: string, align?: "right") => <SortTh col={col} label={label} base={BASE} params={params} sort={sort} align={align} className="px-3 py-3" />;
   const sum = (f: (l: (typeof lines)[number]) => number) => lines.reduce((s, l) => s + f(l), 0);
   const gross = (l: (typeof lines)[number]) => l.baseSalary + l.allowance + l.bonus - l.deduction;
   const st = STATUS[period.status] ?? STATUS.IMPORTED;
@@ -39,16 +51,15 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ t
         <StatCard tone="emerald" icon={<Users size={20} />} label="Thực lĩnh" value={money(sum((l) => l.netPay))} />
       </div>
       <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="px-4 py-3">Mã NV</th><th className="px-3 py-3">Họ tên</th><th className="px-3 py-3 text-right">Ngày công</th><th className="px-3 py-3 text-right">Buổi dạy</th>
-                <th className="px-3 py-3 text-right">Lương chính</th><th className="px-3 py-3 text-right">Phụ cấp</th><th className="px-3 py-3 text-right">Thưởng</th>
-                <th className="px-3 py-3 text-right">BHXH</th><th className="px-3 py-3 text-right">Thuế TNCN</th><th className="px-4 py-3 text-right">Thực lĩnh</th>
+        <div className="max-h-[70vh] overflow-auto">
+          <table className="w-full min-w-[900px] border-separate border-spacing-0 text-sm">
+            <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs">
+              <tr className="[&>th]:border-b [&>th]:border-slate-200">
+                {th("ma", "Mã NV")}{th("ten", "Họ tên")}{th("cong", "Ngày công", "right")}{th("buoi", "Buổi dạy", "right")}{th("luong", "Lương chính", "right")}{th("phucap", "Phụ cấp", "right")}
+                {th("thuong", "Thưởng", "right")}{th("bhxh", "BHXH", "right")}{th("thue", "Thuế TNCN", "right")}{th("thuclinh", "Thực lĩnh", "right")}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="[&>tr:nth-child(even)]:bg-slate-50/50 [&>tr>td]:border-b [&>tr>td]:border-slate-100">
               {lines.map((l) => (
                 <tr key={l.id} className="hover:bg-slate-50/60">
                   <td className="px-4 py-2.5 font-semibold">{l.employee.code}</td>

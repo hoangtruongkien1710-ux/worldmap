@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { addDays, monthOf, monthRange, todayVN, toDate, toDay } from "@/lib/dates";
 import { signedFor } from "./cash";
+import type { BookRow } from "@/components/accounting/ui";
 
 export { signedFor };
 
@@ -22,9 +23,8 @@ export async function cashBalances(day: string) {
   }));
 }
 
-/** Sổ quỹ / sổ tiền gửi: số dư đầu kỳ, từng chứng từ với số dư lũy kế, tổng thu chi trong tháng. */
-export async function cashBook(accountId: string, month: string) {
-  const { from, to } = monthRange(month);
+/** Sổ quỹ / sổ tiền gửi: số dư đầu kỳ, từng chứng từ với số dư lũy kế, tổng thu chi trong khoảng ngày. Thứ tự: cũ → mới (để cộng dồn số dư). */
+export async function cashBook(accountId: string, from: string, to: string) {
   const account = await db.cashAccount.findUniqueOrThrow({ where: { id: accountId } });
   const where = { voidedAt: null, OR: [{ accountId }, { toAccountId: accountId }] };
   const before = await db.cashTxn.findMany({ where: { ...where, date: { lt: toDate(from) } }, select: { type: true, amount: true, accountId: true, toAccountId: true } });
@@ -36,10 +36,16 @@ export async function cashBook(accountId: string, month: string) {
   });
   const accounts = await db.cashAccount.findMany();
   const nameOf = (id: string | null) => accounts.find((a) => a.id === id)?.name ?? "";
+  // Liên kết sang nơi phát sinh chứng từ: học phí → chi tiết phiếu học phí, lương → bảng lương, mua hàng → hóa đơn.
+  const [pays, periods, payables] = await Promise.all([
+    db.payment.findMany({ where: { id: { in: txns.map((t) => t.paymentId).filter((x): x is string => !!x) } }, select: { id: true, invoiceId: true } }),
+    db.payrollPeriod.findMany({ where: { id: { in: txns.map((t) => t.payrollPeriodId).filter((x): x is string => !!x) } }, select: { id: true, month: true } }),
+    db.payable.findMany({ where: { id: { in: txns.map((t) => t.payableId).filter((x): x is string => !!x) } }, select: { id: true, code: true } }),
+  ]);
   let run = opening;
   let totalIn = 0;
   let totalOut = 0;
-  const rows = txns.map((t) => {
+  const rows: BookRow[] = txns.map((t) => {
     const v = signedFor(t, accountId);
     run += v;
     if (v > 0) totalIn += v;
@@ -47,7 +53,17 @@ export async function cashBook(accountId: string, month: string) {
     const label = t.type === "TRANSFER"
       ? v > 0 ? `Nhận từ ${t.account.name}` : `Chuyển sang ${nameOf(t.toAccountId)}`
       : t.category?.name ?? "";
-    return { id: t.id, code: t.code, date: toDay(t.date), description: t.description, counterparty: t.counterparty, label, linked: t.paymentId ? "Học phí" : t.payrollPeriodId ? "Tiền lương" : null, in: v > 0 ? v : 0, out: v < 0 ? -v : 0, balance: run };
+    const inv = pays.find((p) => p.id === t.paymentId)?.invoiceId;
+    const per = periods.find((p) => p.id === t.payrollPeriodId)?.month;
+    const pay = payables.find((p) => p.id === t.payableId)?.code;
+    const link = inv ? { href: `/ke-toan/hoc-phi/${inv}`, label: "Xem học phí" }
+      : per ? { href: `/ke-toan/tien-luong?thang=${per}`, label: "Xem bảng lương" }
+      : pay ? { href: `/ke-toan/chi-phi?ky=nam&q=${pay}`, label: "Xem hóa đơn" } : null;
+    return {
+      id: t.id, code: t.code, date: toDay(t.date), description: t.description, counterparty: t.counterparty, label,
+      linked: t.paymentId ? "Học phí" : t.payrollPeriodId ? "Tiền lương" : t.payableId ? "Mua hàng" : null, link,
+      kind: t.type, categoryId: t.categoryId, supplierId: t.supplierId, in: v > 0 ? v : 0, out: v < 0 ? -v : 0, balance: run,
+    };
   });
   return { account, opening, rows, totalIn, totalOut, closing: run };
 }

@@ -5,6 +5,8 @@ import type { Tone } from "@/components/layout/nav";
 import { TONE } from "@/components/ui/tone";
 import { fmtDate, shiftMonth } from "@/lib/dates";
 import { money } from "@/lib/money";
+import { SortTh } from "@/components/ui/sort-th";
+import { sortRows, type SortState } from "@/lib/sort";
 
 export const monthLabel = (m: string) => `Tháng ${m.slice(5)}/${m.slice(0, 4)}`;
 
@@ -70,53 +72,90 @@ export function VoucherBadge({ code }: { code: string }) {
   return <span className={`badge whitespace-nowrap ${v.cls}`}>{v.label}</span>;
 }
 
-export type BookRow = { id: string; code: string; date: string; description: string; counterparty: string | null; label: string; linked?: string | null; in: number; out: number; balance: number };
+export type BookRow = {
+  id: string; code: string; date: string; description: string; counterparty: string | null; label: string;
+  linked?: string | null; link?: { href: string; label: string } | null;
+  kind: "IN" | "OUT" | "TRANSFER"; categoryId: number | null; supplierId: string | null;
+  in: number; out: number; balance: number;
+};
 
-/** Bảng sổ quỹ / sổ tiền gửi có số dư lũy kế. */
-export function CashBookTable({ opening, rows, totalIn, totalOut, closing, action }: {
-  opening: number; rows: BookRow[]; totalIn: number; totalOut: number; closing: number; action?: (r: BookRow) => React.ReactNode;
-}) {
+const BOOK_SORT: Record<string, (r: BookRow) => string | number> = {
+  ngay: (r) => `${r.date}|${r.code}`, so: (r) => r.code, dg: (r) => r.description,
+  thu: (r) => r.in, chi: (r) => r.out, ton: (r) => r.balance,
+};
+export const BOOK_SORT_COLS = Object.keys(BOOK_SORT);
+
+/** Dải số liệu tổng đầu bảng: nhãn nhỏ, số lớn, màu theo ý nghĩa. */
+export function SummaryStrip({ items }: { items: { label: string; value: React.ReactNode; tone?: "emerald" | "rose" | "slate" | "sky"; hint?: React.ReactNode }[] }) {
+  const C = { emerald: "border-emerald-200 bg-emerald-50/60 text-emerald-700", rose: "border-rose-200 bg-rose-50/60 text-rose-700", sky: "border-sky-200 bg-sky-50/60 text-sky-700", slate: "border-slate-200 bg-white text-slate-800" };
   return (
-    <div className="card overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[820px] text-sm">
-          <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-            <tr>
-              <th className="px-4 py-3">Ngày</th><th className="px-3 py-3">Số chứng từ</th><th className="px-3 py-3">Diễn giải</th>
-              <th className="px-3 py-3 text-right">Thu</th><th className="px-3 py-3 text-right">Chi</th><th className="px-4 py-3 text-right">Tồn</th>{action && <th className="w-12" />}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            <tr className="bg-slate-50/60 font-semibold">
-              <td className="px-4 py-2.5" colSpan={5}>Số dư đầu kỳ</td>
-              <td className="px-4 py-2.5 text-right">{money(opening)}</td>{action && <td />}
-            </tr>
-            {rows.length === 0 && <tr><td colSpan={7} className="px-4 py-6 text-center text-slate-500">Không có chứng từ trong tháng.</td></tr>}
-            {rows.map((r) => (
-              <tr key={r.id} className="hover:bg-slate-50/60">
-                <td className="whitespace-nowrap px-4 py-2.5 text-slate-600">{fmtDate(r.date)}</td>
-                <td className="px-3 py-2.5"><div className="font-semibold">{r.code}</div><VoucherBadge code={r.code} /></td>
-                <td className="px-3 py-2.5">
-                  <div>{r.description}</div>
-                  <div className="text-xs text-slate-500">{[r.label, r.counterparty].filter(Boolean).join(" · ")}</div>
-                </td>
-                <td className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-emerald-700">{r.in ? money(r.in) : ""}</td>
-                <td className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-rose-600">{r.out ? money(r.out) : ""}</td>
-                <td className="whitespace-nowrap px-4 py-2.5 text-right">{money(r.balance)}</td>
-                {action && <td className="px-2 py-2.5 text-right">{action(r)}</td>}
-              </tr>
-            ))}
-          </tbody>
-          <tfoot className="border-t-2 border-slate-200 font-bold">
-            <tr>
-              <td className="px-4 py-3" colSpan={3}>Cộng phát sinh · Số dư cuối kỳ</td>
-              <td className="px-3 py-3 text-right text-emerald-700">{money(totalIn)}</td>
-              <td className="px-3 py-3 text-right text-rose-600">{money(totalOut)}</td>
-              <td className="px-4 py-3 text-right">{money(closing)}</td>{action && <td />}
-            </tr>
-          </tfoot>
-        </table>
-      </div>
+    <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {items.map((i) => (
+        <div key={i.label} className={`rounded-xl border px-4 py-3 ${C[i.tone ?? "slate"]}`}>
+          <div className="text-xs font-semibold uppercase tracking-wide opacity-70">{i.label}</div>
+          <div className="mt-0.5 text-base font-extrabold tabular-nums sm:text-xl">{i.value}</div>
+          {i.hint && <div className="text-xs opacity-70">{i.hint}</div>}
+        </div>
+      ))}
     </div>
+  );
+}
+
+/** Bảng sổ quỹ / sổ tiền gửi: mới nhất trước, bấm tiêu đề cột để sắp xếp, có liên kết sang học phí / lương / hóa đơn. */
+export function CashBookTable({ opening, rows, totalIn, totalOut, closing, action, base, params, sort }: {
+  opening: number; rows: BookRow[]; totalIn: number; totalOut: number; closing: number; action?: (r: BookRow) => React.ReactNode;
+  base: string; params: Record<string, string | undefined>; sort: SortState;
+}) {
+  const shown = sort.col ? sortRows(rows, sort, BOOK_SORT) : [...rows].reverse();
+  const th = (col: string, label: string, align?: "right") => <SortTh col={col} label={label} base={base} params={params} sort={sort} align={align} className="px-3 py-3" />;
+  return (
+    <>
+      <SummaryStrip items={[
+        { label: "Tồn đầu kỳ", value: money(opening) },
+        { label: "Tổng thu", value: money(totalIn), tone: "emerald", hint: `${rows.filter((r) => r.in).length} chứng từ` },
+        { label: "Tổng chi", value: money(totalOut), tone: "rose", hint: `${rows.filter((r) => r.out).length} chứng từ` },
+        { label: "Tồn cuối kỳ", value: money(closing), tone: "sky" },
+      ]} />
+      <div className="card overflow-hidden">
+        <div className="max-h-[70vh] overflow-auto">
+          <table className="w-full min-w-[860px] border-separate border-spacing-0 text-sm">
+            <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs">
+              <tr className="[&>th]:border-b [&>th]:border-slate-200">
+                {th("ngay", "Ngày")}{th("so", "Số chứng từ")}{th("dg", "Diễn giải")}
+                {th("thu", "Thu", "right")}{th("chi", "Chi", "right")}{th("ton", "Tồn", "right")}{action && <th className="w-12" />}
+              </tr>
+            </thead>
+            <tbody className="[&>tr:nth-child(even)]:bg-slate-50/50 [&>tr>td]:border-b [&>tr>td]:border-slate-100">
+              {shown.length === 0 && <tr><td colSpan={7} className="px-4 py-10 text-center text-slate-500">Không có chứng từ trong khoảng thời gian này.</td></tr>}
+              {shown.map((r) => (
+                <tr key={r.id} className="hover:bg-acc-50/40">
+                  <td className="whitespace-nowrap px-4 py-2.5 align-top text-slate-600">{fmtDate(r.date)}</td>
+                  <td className="px-3 py-2.5 align-top">
+                    {r.link ? <Link href={r.link.href} className="font-semibold text-acc-700 hover:underline">{r.code}</Link> : <div className="font-semibold">{r.code}</div>}
+                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5"><VoucherBadge code={r.code} />{r.link && <Link href={r.link.href} className="text-xs font-semibold text-acc-700 hover:underline">{r.link.label} →</Link>}</div>
+                  </td>
+                  <td className="px-3 py-2.5 align-top">
+                    <div>{r.description}</div>
+                    <div className="text-xs text-slate-500">{[r.label, r.counterparty].filter(Boolean).join(" · ")}</div>
+                  </td>
+                  <td className="whitespace-nowrap border-l !border-l-slate-100 bg-emerald-50/30 px-3 py-2.5 text-right align-top font-semibold tabular-nums text-emerald-700">{r.in ? money(r.in) : <span className="text-slate-300">—</span>}</td>
+                  <td className="whitespace-nowrap bg-rose-50/30 px-3 py-2.5 text-right align-top font-semibold tabular-nums text-rose-600">{r.out ? money(r.out) : <span className="text-slate-300">—</span>}</td>
+                  <td className="whitespace-nowrap border-l !border-l-slate-100 px-4 py-2.5 text-right align-top font-bold tabular-nums">{money(r.balance)}</td>
+                  {action && <td className="px-2 py-2.5 text-right align-top">{action(r)}</td>}
+                </tr>
+              ))}
+            </tbody>
+            <tfoot className="sticky bottom-0 bg-slate-50 font-bold [&>tr>td]:border-t-2 [&>tr>td]:border-slate-200">
+              <tr>
+                <td className="px-4 py-3" colSpan={3}>Cộng phát sinh trong kỳ</td>
+                <td className="px-3 py-3 text-right tabular-nums text-emerald-700">{money(totalIn)}</td>
+                <td className="px-3 py-3 text-right tabular-nums text-rose-600">{money(totalOut)}</td>
+                <td className="px-4 py-3 text-right tabular-nums">{money(closing)}</td>{action && <td />}
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </>
   );
 }

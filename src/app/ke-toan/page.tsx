@@ -1,25 +1,29 @@
 import Link from "next/link";
 import { ArrowDownLeft, ArrowUpRight, HandCoins, Landmark, Receipt, Wallet } from "lucide-react";
 import { PageHeader } from "@/components/layout/app-shell";
-import { MonthNav, StatCard, VoucherBadge, monthLabel } from "@/components/accounting/ui";
+import { StatCard, VoucherBadge } from "@/components/accounting/ui";
+import { PeriodBar, qs } from "@/components/accounting/period-bar";
+import { pickPeriod, type PeriodSP } from "@/lib/accounting/period";
 import { db } from "@/lib/db";
 import { guardPage } from "@/lib/auth/session";
-import { cashBalances, ledgerBalance, pickMonth, profitAndLoss } from "@/lib/accounting/queries";
-import { fmtDate, monthRange, shiftMonth, todayVN, toDate } from "@/lib/dates";
+import { cashBalances, ledgerBalance, profitAndLoss } from "@/lib/accounting/queries";
+import { fmtDate, monthOf, monthRange, shiftMonth, todayVN, toDate, toDay } from "@/lib/dates";
 import { money, shortMoney } from "@/lib/money";
 
 export const metadata = { title: "Tổng quan kế toán" };
 export const dynamic = "force-dynamic";
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ thang?: string }> }) {
+export default async function Page({ searchParams }: { searchParams: Promise<PeriodSP> }) {
   await guardPage("accounting.view");
-  const month = pickMonth((await searchParams).thang);
+  const sp = await searchParams;
+  const period = pickPeriod(sp);
   const today = todayVN();
-  const { from, to } = monthRange(month);
+  const { from, to } = period;
   const asOf = to < today ? to : today;
+  const month = monthOf(asOf < from ? from : asOf);
 
   const months = [shiftMonth(month, -2), shiftMonth(month, -1), month];
-  const [balances, receivable, payable, pl, flows, recent] = await Promise.all([
+  const [balances, receivable, payable, pl, flows, cur, recent] = await Promise.all([
     cashBalances(asOf),
     ledgerBalance("131", asOf),
     ledgerBalance("331", asOf).then((v) => Math.max(0, -v)),
@@ -30,16 +34,18 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ t
       const v = (t: string) => g.find((x) => x.type === t)?._sum.amount ?? 0;
       return { month: m, in: v("IN"), out: v("OUT") };
     })),
-    db.cashTxn.findMany({ where: { date: { lte: toDate(asOf) } }, include: { account: true }, orderBy: [{ date: "desc" }, { createdAt: "desc" }], take: 8 }),
+    db.cashTxn.groupBy({ by: ["type"], where: { voidedAt: null, type: { in: ["IN", "OUT"] }, date: { gte: toDate(from), lte: toDate(to) } }, _sum: { amount: true } })
+      .then((g) => ({ in: g.find((x) => x.type === "IN")?._sum.amount ?? 0, out: g.find((x) => x.type === "OUT")?._sum.amount ?? 0 })),
+    db.cashTxn.findMany({ where: { voidedAt: null, date: { gte: toDate(from), lte: toDate(asOf < from ? from : asOf) } }, include: { account: true }, orderBy: [{ date: "desc" }, { createdAt: "desc" }], take: 8 }),
   ]);
   const cash = balances.filter((b) => b.kind === "CASH").reduce((s, b) => s + b.balance, 0);
   const bank = balances.filter((b) => b.kind === "BANK").reduce((s, b) => s + b.balance, 0);
-  const cur = flows[2];
   const max = Math.max(1, ...flows.flatMap((f) => [f.in, f.out]));
 
   return (
     <>
-      <PageHeader title="Tổng quan kế toán" subtitle={`Số liệu đến ngày ${fmtDate(asOf)} · lãi lỗ là tạm tính`} actions={<MonthNav month={month} base="/ke-toan" />} />
+      <PageHeader title="Tổng quan kế toán" subtitle={`Số liệu đến ngày ${fmtDate(asOf)} · lãi lỗ là tạm tính`} />
+      <PeriodBar base="/ke-toan" period={period} params={sp} />
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard tone="emerald" icon={<Wallet size={20} />} label="Tiền mặt tại quỹ" value={money(cash)} />
@@ -53,8 +59,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ t
           <h2 className="mb-1 text-lg font-bold">Dòng tiền thu chi</h2>
           <p className="mb-4 text-xs text-slate-500">Không tính chuyển tiền nội bộ giữa quỹ và ngân hàng</p>
           <div className="mb-5 grid grid-cols-2 gap-3">
-            <div className="rounded-xl bg-emerald-50 p-3"><div className="flex items-center gap-1 text-xs font-medium text-emerald-700"><ArrowDownLeft size={14} /> Thu {monthLabel(month).toLowerCase()}</div><div className="text-xl font-extrabold text-emerald-700">{money(cur.in)}</div></div>
-            <div className="rounded-xl bg-rose-50 p-3"><div className="flex items-center gap-1 text-xs font-medium text-rose-700"><ArrowUpRight size={14} /> Chi {monthLabel(month).toLowerCase()}</div><div className="text-xl font-extrabold text-rose-700">{money(cur.out)}</div></div>
+            <div className="rounded-xl bg-emerald-50 p-3"><div className="flex items-center gap-1 text-xs font-medium text-emerald-700"><ArrowDownLeft size={14} /> Thu · {period.label}</div><div className="text-xl font-extrabold text-emerald-700">{money(cur.in)}</div></div>
+            <div className="rounded-xl bg-rose-50 p-3"><div className="flex items-center gap-1 text-xs font-medium text-rose-700"><ArrowUpRight size={14} /> Chi · {period.label}</div><div className="text-xl font-extrabold text-rose-700">{money(cur.out)}</div></div>
           </div>
           <div className="space-y-3">
             {flows.filter((f) => f.in || f.out).map((f) => (
@@ -70,7 +76,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ t
         </section>
 
         <section className="card p-5 lg:col-span-2">
-          <h2 className="mb-4 text-lg font-bold">Lãi lỗ tạm tính · {monthLabel(month)}</h2>
+          <h2 className="mb-4 text-lg font-bold">Lãi lỗ tạm tính · {period.label}</h2>
           <dl className="space-y-2 text-sm">
             <Row label="Doanh thu học phí" value={pl.revenue.tuition} />
             <Row label="Doanh thu khác (giáo trình, thi thử)" value={pl.revenue.other} />
@@ -91,11 +97,12 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ t
       </div>
 
       <section className="card mt-6 p-5">
-        <h2 className="mb-3 text-lg font-bold">Chứng từ gần đây</h2>
+        <div className="mb-3 flex items-center justify-between"><h2 className="text-lg font-bold">Chứng từ gần đây <span className="text-xs font-medium text-slate-400">(mới nhất trước)</span></h2><Link href={`/ke-toan/quy${qs({ ky: "tuychon", tu: from, den: to })}`} className="text-sm font-semibold text-acc-700 hover:underline">Xem sổ quỹ →</Link></div>
         <div className="divide-y divide-slate-100">
           {recent.map((t) => (
             <div key={t.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5 text-sm">
               <span className="w-20 shrink-0 text-slate-500">{fmtDate(t.date)}</span>
+              <Link href={`${t.account.kind === "BANK" ? `/ke-toan/ngan-hang?tk=${t.account.code}&` : "/ke-toan/quy?"}ky=tuychon&tu=${toDay(t.date)}&den=${toDay(t.date)}`} className="font-semibold text-acc-700 hover:underline">{t.code}</Link>
               <VoucherBadge code={t.code} />
               <span className="min-w-0 flex-1 truncate">{t.description}</span>
               <span className="text-xs text-slate-500">{t.account.code}</span>

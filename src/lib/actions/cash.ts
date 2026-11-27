@@ -5,7 +5,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { createCashTxn, voidCashTxn } from "@/lib/accounting/cash-service";
 import { nextCashCode } from "@/lib/accounting/vouchers";
 import { postEntry } from "@/lib/accounting/posting";
-import { todayVN, toDate } from "@/lib/dates";
+import { todayVN, toDate, toDay } from "@/lib/dates";
 import type { ActionResult } from "@/components/ui/modal";
 import { audit, day, int, opt, req, run, UserError } from "./util";
 
@@ -71,6 +71,92 @@ export async function voidVoucher(txnId: string, _: ActionResult) {
     await db.$transaction((tx) => voidCashTxn(tx, txnId, todayVN()));
     await audit(user.id, "void", "CashTxn", txnId, { code: t.code });
     return `Đã hủy ${t.code}.`;
+  }, PATHS);
+}
+
+/**
+ * Sửa chứng từ thu/chi/chuyển tiền lập tay (ngày, số tiền, khoản mục, diễn giải…).
+ * Bút toán của chứng từ được ghi lại cho khớp; giá trị cũ lưu trong nhật ký thao tác.
+ * Phiếu sinh từ học phí / lương / mua hàng không sửa ở đây.
+ */
+export async function updateVoucher(txnId: string, _: ActionResult, f: FormData) {
+  return run(async () => {
+    const user = await requirePermission("accounting.post");
+    const t = await db.cashTxn.findUniqueOrThrow({ where: { id: txnId }, include: { account: true } });
+    if (t.voidedAt) throw new UserError("Chứng từ đã hủy, không sửa được.");
+    if (t.paymentId) throw new UserError("Phiếu này sinh từ thu học phí. Hãy sửa hoặc hủy lần thu ở tab Học phí của lớp.");
+    if (t.payrollPeriodId) throw new UserError("Phiếu trả lương hãy sửa ở màn Tiền lương.");
+    if (t.payableId) throw new UserError("Phiếu trả nợ nhà cung cấp: hãy hủy phiếu rồi lập lại.");
+    const amount = int(f, "amount", "số tiền");
+    if (!amount || amount <= 0) throw new UserError("Số tiền phải lớn hơn 0.", "amount");
+    const d = day(f, "date", "ngày chứng từ");
+    const description = req(f, "description", "diễn giải");
+    await db.$transaction(async (tx) => {
+      const entry = await tx.journalEntry.findFirst({ where: { sourceType: "CashTxn", sourceId: t.id } });
+      if (!entry) throw new UserError("Không tìm thấy bút toán của chứng từ này.");
+      let lines: { accountCode: string; debit?: number; credit?: number; cashAccountId?: string | null; supplierId?: string | null }[];
+      let data: { categoryId?: number | null; counterparty?: string | null; supplierId?: string | null } = {};
+      if (t.type === "TRANSFER") {
+        const to = await tx.cashAccount.findUniqueOrThrow({ where: { id: t.toAccountId! } });
+        lines = [{ accountCode: to.ledgerCode, debit: amount, cashAccountId: to.id }, { accountCode: t.account.ledgerCode, credit: amount, cashAccountId: t.account.id }];
+      } else {
+        const cat = await tx.txnCategory.findUniqueOrThrow({ where: { id: int(f, "categoryId", "khoản mục")! } });
+        if (cat.code === "THU_HP") throw new UserError("Thu học phí hãy làm ở tab Học phí của lớp.", "categoryId");
+        if (cat.direction !== t.type) throw new UserError(t.type === "IN" ? "Chọn khoản mục thu." : "Chọn khoản mục chi.", "categoryId");
+        const ledger = t.type === "IN" ? cat.creditAccount : cat.debitAccount;
+        if (!ledger) throw new UserError("Khoản mục chưa khai báo tài khoản hạch toán.", "categoryId");
+        const supplierId = t.type === "OUT" ? opt(f, "supplierId") : null;
+        data = { categoryId: cat.id, counterparty: opt(f, "counterparty"), supplierId };
+        const cash = { accountCode: t.account.ledgerCode, cashAccountId: t.account.id, [t.type === "IN" ? "debit" : "credit"]: amount };
+        const other = { accountCode: ledger, supplierId: ledger === "331" ? supplierId : null, [t.type === "IN" ? "credit" : "debit"]: amount };
+        lines = t.type === "IN" ? [cash, other] : [other, cash];
+      }
+      await tx.cashTxn.update({ where: { id: t.id }, data: { ...data, amount, description, date: toDate(d) } });
+      await tx.journalLine.deleteMany({ where: { entryId: entry.id } });
+      await tx.journalEntry.update({
+        where: { id: entry.id },
+        data: { date: toDate(d), description, lines: { create: lines.map((l) => ({ ...l, debit: l.debit ?? 0, credit: l.credit ?? 0 })) } },
+      });
+    });
+    await audit(user.id, "update", "CashTxn", t.id, { code: t.code, before: { date: t.date, amount: t.amount, description: t.description, categoryId: t.categoryId, counterparty: t.counterparty }, after: { date: d, amount, description } });
+    return `Đã sửa ${t.code}.`;
+  }, PATHS);
+}
+
+/**
+ * Sửa hóa đơn mua hàng. Chưa trả đồng nào: sửa được mọi thông tin; đã trả một phần:
+ * chỉ sửa diễn giải, hạn trả và số tiền (không thấp hơn số đã trả).
+ */
+export async function updatePayable(payableId: string, _: ActionResult, f: FormData) {
+  return run(async () => {
+    const user = await requirePermission("accounting.post");
+    const p = await db.payable.findUniqueOrThrow({ where: { id: payableId } });
+    const paid = (await db.cashTxn.aggregate({ where: { payableId, voidedAt: null }, _sum: { amount: true } }))._sum.amount ?? 0;
+    const locked = paid > 0;
+    const description = req(f, "description", "diễn giải");
+    const amount = int(f, "amount", "số tiền");
+    if (!amount || amount <= 0) throw new UserError("Số tiền phải lớn hơn 0.", "amount");
+    if (amount < paid) throw new UserError(`Số tiền không được thấp hơn số đã trả (${paid.toLocaleString("vi-VN")}đ).`, "amount");
+    const dueDate = day(f, "dueDate", "hạn trả");
+    const billDate = locked ? toDay(p.billDate) : day(f, "billDate", "ngày hóa đơn");
+    if (dueDate < billDate) throw new UserError("Hạn trả phải sau ngày hóa đơn.", "dueDate");
+    const supplierId = locked ? p.supplierId : req(f, "supplierId", "nhà cung cấp");
+    const categoryId = locked ? p.categoryId! : int(f, "categoryId", "khoản mục")!;
+    const cat = await db.txnCategory.findUniqueOrThrow({ where: { id: categoryId } });
+    if (!cat.debitAccount || cat.direction !== "OUT") throw new UserError("Chọn khoản mục chi.", "categoryId");
+    await db.$transaction(async (tx) => {
+      const entry = await tx.journalEntry.findFirst({ where: { sourceType: "Payable", sourceId: p.id } });
+      await tx.payable.update({ where: { id: p.id }, data: { description, amount, supplierId, categoryId, billDate: toDate(billDate), dueDate: toDate(dueDate) } });
+      if (entry) {
+        await tx.journalLine.deleteMany({ where: { entryId: entry.id } });
+        await tx.journalEntry.update({
+          where: { id: entry.id },
+          data: { date: toDate(billDate), description, lines: { create: [{ accountCode: cat.debitAccount!, debit: amount, credit: 0 }, { accountCode: "331", debit: 0, credit: amount, supplierId }] } },
+        });
+      }
+    });
+    await audit(user.id, "update", "Payable", p.id, { code: p.code, before: { amount: p.amount, billDate: p.billDate, dueDate: p.dueDate, description: p.description }, after: { amount, billDate, dueDate, description } });
+    return `Đã sửa hóa đơn ${p.code}.`;
   }, PATHS);
 }
 
