@@ -1,5 +1,7 @@
+import { ExportLink } from "@/components/accounting/export-link";
 import { PageHeader } from "@/components/layout/app-shell";
-import { CashBookTable, BOOK_SORT_COLS, Tabs } from "@/components/accounting/ui";
+import { CashBookTable, Tabs } from "@/components/accounting/ui";
+import { BOOK_SORT_COLS } from "@/lib/accounting/book-sort";
 import { PeriodBar, qs } from "@/components/accounting/period-bar";
 import { db } from "@/lib/db";
 import { VoucherButtons, VoucherRowMenu, loadVoucherLookups } from "@/components/accounting/vouchers";
@@ -26,7 +28,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<SP>
   const [book, lookups] = await Promise.all([cashBook(acc.id, period.from, period.to), post ? loadVoucherLookups() : null]);
   return (
     <>
-      <PageHeader title="Sổ tiền gửi ngân hàng" subtitle={`${acc.bankName} · STK ${acc.accountNo} · ${period.label}`} actions={post && <VoucherButtons account={acc} />} />
+      <PageHeader title="Sổ tiền gửi ngân hàng" subtitle={`${acc.bankName} · STK ${acc.accountNo} · ${period.label}`} actions={<>{post && <VoucherButtons account={acc} />}<ExportLink base="/ke-toan/ngan-hang" params={params} /></>} />
       <div className="mb-4">
         <Tabs items={banks.map((b) => ({ href: `/ke-toan/ngan-hang${qs(params, { tk: b.code })}`, label: b.name, active: b.id === acc.id }))} />
       </div>

@@ -1,4 +1,5 @@
 import { Banknote, ShieldCheck, Users } from "lucide-react";
+import { ExportLink } from "@/components/accounting/export-link";
 import { PageHeader } from "@/components/layout/app-shell";
 import { StatCard, Tabs, monthLabel } from "@/components/accounting/ui";
 import { db } from "@/lib/db";
@@ -6,7 +7,7 @@ import { guardPage } from "@/lib/auth/session";
 import { fmtDate } from "@/lib/dates";
 import { money } from "@/lib/money";
 import { SortTh } from "@/components/ui/sort-th";
-import { parseSort, sortRows } from "@/lib/sort";
+import { loadPayroll } from "@/lib/accounting/loaders";
 
 export const metadata = { title: "Tiền lương" };
 export const dynamic = "force-dynamic";
@@ -23,16 +24,10 @@ const BASE = "/ke-toan/tien-luong";
 export default async function Page({ searchParams }: { searchParams: Promise<SP> }) {
   await guardPage("payroll.view");
   const sp = await searchParams;
-  const periods = await db.payrollPeriod.findMany({ orderBy: { month: "desc" } });
-  const period = periods.find((p) => p.month === sp.thang) ?? periods[0];
-  if (!period) return <PageHeader title="Tiền lương" subtitle="Chưa nhập bảng lương tháng nào" />;
+  const data = await loadPayroll(sp);
+  if (!data) return <PageHeader title="Tiền lương" subtitle="Chưa nhập bảng lương tháng nào" />;
+  const { periods, period, lines, sort } = data;
   const params = { ...sp, thang: period.month };
-  const sort = parseSort(sp, ["ma", "ten", "cong", "buoi", "luong", "phucap", "thuong", "bhxh", "thue", "thuclinh"]);
-  const raw = await db.payrollLine.findMany({ where: { periodId: period.id }, include: { employee: true }, orderBy: { employee: { code: "asc" } } });
-  const lines = sortRows(raw, sort, {
-    ma: (l) => l.employee.code, ten: (l) => l.employee.fullName, cong: (l) => Number(l.workDays), buoi: (l) => l.teachingSessions, luong: (l) => l.baseSalary,
-    phucap: (l) => l.allowance, thuong: (l) => l.bonus, bhxh: (l) => l.insurance, thue: (l) => l.pit, thuclinh: (l) => l.netPay,
-  });
   const th = (col: string, label: string, align?: "right") => <SortTh col={col} label={label} base={BASE} params={params} sort={sort} align={align} className="px-3 py-3" />;
   const sum = (f: (l: (typeof lines)[number]) => number) => lines.reduce((s, l) => s + f(l), 0);
   const gross = (l: (typeof lines)[number]) => l.baseSalary + l.allowance + l.bonus - l.deduction;
@@ -40,7 +35,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<SP>
 
   return (
     <>
-      <PageHeader title="Tiền lương" subtitle={`Bảng lương nhập từ file ${period.sourceFile} ngày ${fmtDate(period.importedAt)} (chấm công bằng máy riêng)`} />
+      <PageHeader title="Tiền lương" subtitle={`Bảng lương nhập từ file ${period.sourceFile} ngày ${fmtDate(period.importedAt)} (chấm công bằng máy riêng)`} actions={<ExportLink base={BASE} params={params} />} />
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <Tabs items={periods.map((p) => ({ href: `/ke-toan/tien-luong?thang=${p.month}`, label: monthLabel(p.month), active: p.id === period.id }))} />
         <span className={`badge ${st.cls}`}>{st.label}</span>

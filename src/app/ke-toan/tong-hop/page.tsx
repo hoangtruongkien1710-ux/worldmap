@@ -1,28 +1,20 @@
 import Link from "next/link";
 import clsx from "clsx";
+import { ExportLink } from "@/components/accounting/export-link";
 import { PageHeader } from "@/components/layout/app-shell";
 import { SummaryStrip, Tabs } from "@/components/accounting/ui";
 import { PeriodBar, SearchForm, qs } from "@/components/accounting/period-bar";
 import { SortTh } from "@/components/ui/sort-th";
-import { db } from "@/lib/db";
 import { guardPage } from "@/lib/auth/session";
-import { ledgerSums, prevDay } from "@/lib/accounting/queries";
-import { pickPeriod, type PeriodSP } from "@/lib/accounting/period";
-import { parseSort, sortRows } from "@/lib/sort";
+import { loadTrial, TRIAL_TYPES, type TrialSP } from "@/lib/accounting/loaders";
 import { money } from "@/lib/money";
 
 export const metadata = { title: "Tổng hợp" };
 export const dynamic = "force-dynamic";
 
-type SP = PeriodSP & { q?: string; loai?: string; xep?: string; chieu?: string };
+type SP = TrialSP;
 const BASE = "/ke-toan/tong-hop";
-const TYPES: Record<string, { label: string; cls: string }> = {
-  ASSET: { label: "Tài sản", cls: "bg-sky-50 text-sky-700" },
-  LIABILITY: { label: "Nợ phải trả", cls: "bg-orange-50 text-orange-700" },
-  EQUITY: { label: "Vốn", cls: "bg-violet-50 text-violet-700" },
-  REVENUE: { label: "Doanh thu", cls: "bg-emerald-50 text-emerald-700" },
-  EXPENSE: { label: "Chi phí", cls: "bg-rose-50 text-rose-700" },
-};
+const TYPES = TRIAL_TYPES;
 
 /** Mỗi tài khoản dẫn tới sổ / màn nghiệp vụ tương ứng, giữ nguyên khoảng thời gian đang xem. */
 function target(code: string, p: { key: string; month?: string; from: string; to: string }) {
@@ -38,41 +30,16 @@ function target(code: string, p: { key: string; month?: string; from: string; to
 export default async function Page({ searchParams }: { searchParams: Promise<SP> }) {
   await guardPage("accounting.view");
   const sp = await searchParams;
-  const period = pickPeriod(sp);
-  const { from, to } = period;
-  const [accounts, before, during] = await Promise.all([
-    db.ledgerAccount.findMany({ orderBy: { code: "asc" } }),
-    ledgerSums(null, prevDay(from)),
-    ledgerSums(from, to),
-  ]);
-  const z = { debit: 0, credit: 0 };
-  // Chỉ hiện tài khoản chi tiết (không có tài khoản con) và có số liệu.
-  const leaves = accounts.filter((a) => !accounts.some((c) => c.parentCode === a.code));
-  const all = leaves.map((a) => {
-    const o = before.get(a.code) ?? z;
-    const p = during.get(a.code) ?? z;
-    const open = o.debit - o.credit;
-    const close = open + p.debit - p.credit;
-    return { ...a, open, pDebit: p.debit, pCredit: p.credit, close };
-  }).filter((r) => r.open || r.pDebit || r.pCredit || r.close);
+  const { period, all, rows, sort, q, loai } = await loadTrial(sp);
   const tot = (rows: typeof all, f: (r: (typeof all)[number]) => number) => rows.reduce((s, r) => s + f(r), 0);
   const balanced = tot(all, (r) => r.pDebit) === tot(all, (r) => r.pCredit) && tot(all, (r) => r.close) === 0;
-
-  const q = sp.q?.trim().toLowerCase();
-  const loai = sp.loai && TYPES[sp.loai] ? sp.loai : "";
-  const filtered = all.filter((r) => (!loai || r.type === loai) && (!q || r.code.includes(q) || r.name.toLowerCase().includes(q)));
-  const sort = parseSort(sp, ["tk", "ten", "odn", "odc", "pn", "pc", "cdn", "cdc"]);
-  const rows = sortRows(filtered, sort, {
-    tk: (r) => r.code, ten: (r) => r.name, odn: (r) => Math.max(0, r.open), odc: (r) => Math.max(0, -r.open),
-    pn: (r) => r.pDebit, pc: (r) => r.pCredit, cdn: (r) => Math.max(0, r.close), cdc: (r) => Math.max(0, -r.close),
-  });
   const side = (v: number, want: "D" | "C") => (want === "D" ? (v > 0 ? money(v) : "") : v < 0 ? money(-v) : "");
   const cell = (v: number, want: "D" | "C") => side(v, want) || <span className="text-slate-300">—</span>;
   const th = (col: string, label: string, cls = "") => <SortTh col={col} label={label} base={BASE} params={sp} sort={sort} align="right" className={clsx("px-3 py-2", cls)} />;
 
   return (
     <>
-      <PageHeader title="Bảng cân đối số phát sinh" subtitle={`${period.label} · lấy từ sổ nhật ký chung (bút toán kép)`} />
+      <PageHeader title="Bảng cân đối số phát sinh" subtitle={`${period.label} · lấy từ sổ nhật ký chung (bút toán kép)`} actions={<ExportLink base={BASE} params={sp} />} />
       <PeriodBar base={BASE} period={period} params={sp} />
       <SummaryStrip items={[
         { label: "Phát sinh Nợ", value: money(tot(all, (r) => r.pDebit)), tone: "sky" },

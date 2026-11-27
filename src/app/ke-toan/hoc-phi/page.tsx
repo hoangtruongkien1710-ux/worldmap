@@ -1,57 +1,33 @@
 import Link from "next/link";
 import clsx from "clsx";
 import { ChevronRight, CircleCheck, HandCoins, Receipt } from "lucide-react";
+import { ExportLink } from "@/components/accounting/export-link";
 import { PageHeader } from "@/components/layout/app-shell";
 import { StatCard, Tabs } from "@/components/accounting/ui";
 import { PeriodBar, SearchForm, qs } from "@/components/accounting/period-bar";
 import { SortTh } from "@/components/ui/sort-th";
-import { db } from "@/lib/db";
 import { guardPage } from "@/lib/auth/session";
 import { fmtDate } from "@/lib/dates";
 import { money } from "@/lib/money";
-import { monthsIn, pickPeriod, type PeriodSP } from "@/lib/accounting/period";
-import { parseSort, sortRows } from "@/lib/sort";
+import type { PeriodSP } from "@/lib/accounting/period";
+import { loadFees } from "@/lib/accounting/loaders";
 
 export const metadata = { title: "Học phí & thu khác" };
 export const dynamic = "force-dynamic";
 
-type Item = { className: string; amount: number; discount: number; note?: string };
 type SP = PeriodSP & { tt?: string; q?: string; xep?: string; chieu?: string };
 const BASE = "/ke-toan/hoc-phi";
 
 export default async function Page({ searchParams }: { searchParams: Promise<SP> }) {
   await guardPage("accounting.view");
   const sp = await searchParams;
-  const period = pickPeriod(sp, { defaultKey: "tatca" });
-  const filter = sp.tt === "con-no" ? "debt" : sp.tt === "da-du" ? "paid" : "all";
-  const m = monthsIn(period);
-  const q = sp.q?.trim().toLowerCase();
-  const invoices = await db.invoice.findMany({
-    where: period.key === "tatca" ? {} : { month: { gte: m.from, lte: m.to } },
-    include: { student: true, payments: { where: { voidedAt: null }, orderBy: { paidAt: "asc" } } },
-    orderBy: [{ month: "desc" }, { createdAt: "desc" }],
-  });
-  const all = invoices
-    .filter((i) => !q || [i.student.fullName, i.student.code, i.student.phone, i.student.parentPhone, i.student.parentName].some((v) => v?.toLowerCase().includes(q)))
-    .map((i) => {
-      const total = i.lockedAmount ?? 0;
-      const paid = i.payments.reduce((s, p) => s + p.amount, 0);
-      const items = (i.lockedDetail ?? []) as Item[];
-      return { ...i, total, paid, remain: total - paid, items, classes: items.map((x) => x.className).join(", "), lastPaid: i.payments.at(-1)?.paidAt ?? null };
-    });
+  const { period, filter, all, shown, sort } = await loadFees(sp);
   const sum = (f: (r: (typeof all)[number]) => number) => all.reduce((s, r) => s + f(r), 0);
-  const sort = parseSort(sp, ["hv", "thang", "lop", "phaithu", "dathu", "thucuoi", "conlai"]);
-  // Mặc định: tháng học phí mới nhất trước, trong tháng thì lần thu gần nhất trước.
-  const base = all.filter((r) => (filter === "debt" ? r.remain > 0 : filter === "paid" ? r.remain <= 0 : true))
-    .sort((a, b) => b.month.localeCompare(a.month) || (b.lastPaid?.getTime() ?? 0) - (a.lastPaid?.getTime() ?? 0));
-  const shown = sortRows(base, sort, {
-    hv: (r) => r.student.fullName, thang: (r) => r.month, lop: (r) => r.classes, phaithu: (r) => r.total, dathu: (r) => r.paid, thucuoi: (r) => r.lastPaid, conlai: (r) => r.remain,
-  });
   const th = (col: string, label: string, align?: "right") => <SortTh col={col} label={label} base={BASE} params={sp} sort={sort} align={align} className="px-3 py-3" />;
 
   return (
     <>
-      <PageHeader title="Học phí & thu khác" subtitle="Học phí ghi nhận khi khai giảng; thu tiền mặt hoặc chuyển khoản theo từng đợt" />
+      <PageHeader title="Học phí & thu khác" subtitle="Học phí ghi nhận khi khai giảng; thu tiền mặt hoặc chuyển khoản theo từng đợt" actions={<ExportLink base={BASE} params={sp} />} />
       <PeriodBar base={BASE} period={period} params={sp} allowAll />
       <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard tone="indigo" icon={<Receipt size={20} />} label="Học phí đã ghi nhận" value={money(sum((r) => r.total))} hint={`${all.length} phiếu báo học phí · ${period.label}`} />

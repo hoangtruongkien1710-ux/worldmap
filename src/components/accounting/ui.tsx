@@ -6,7 +6,8 @@ import { TONE } from "@/components/ui/tone";
 import { fmtDate, shiftMonth } from "@/lib/dates";
 import { money } from "@/lib/money";
 import { SortTh } from "@/components/ui/sort-th";
-import { sortRows, type SortState } from "@/lib/sort";
+import type { SortState } from "@/lib/sort";
+import { orderBook } from "@/lib/accounting/book-sort";
 
 export const monthLabel = (m: string) => `Tháng ${m.slice(5)}/${m.slice(0, 4)}`;
 
@@ -79,12 +80,6 @@ export type BookRow = {
   in: number; out: number; balance: number;
 };
 
-const BOOK_SORT: Record<string, (r: BookRow) => string | number> = {
-  ngay: (r) => `${r.date}|${r.code}`, so: (r) => r.code, dg: (r) => r.description,
-  thu: (r) => r.in, chi: (r) => r.out, ton: (r) => r.balance,
-};
-export const BOOK_SORT_COLS = Object.keys(BOOK_SORT);
-
 /** Dải số liệu tổng đầu bảng: nhãn nhỏ, số lớn, màu theo ý nghĩa. */
 export function SummaryStrip({ items }: { items: { label: string; value: React.ReactNode; tone?: "emerald" | "rose" | "slate" | "sky"; hint?: React.ReactNode }[] }) {
   const C = { emerald: "border-emerald-200 bg-emerald-50/60 text-emerald-700", rose: "border-rose-200 bg-rose-50/60 text-rose-700", sky: "border-sky-200 bg-sky-50/60 text-sky-700", slate: "border-slate-200 bg-white text-slate-800" };
@@ -106,7 +101,7 @@ export function CashBookTable({ opening, rows, totalIn, totalOut, closing, actio
   opening: number; rows: BookRow[]; totalIn: number; totalOut: number; closing: number; action?: (r: BookRow) => React.ReactNode;
   base: string; params: Record<string, string | undefined>; sort: SortState;
 }) {
-  const shown = sort.col ? sortRows(rows, sort, BOOK_SORT) : [...rows].reverse();
+  const shown = orderBook(rows, sort);
   const th = (col: string, label: string, align?: "right") => <SortTh col={col} label={label} base={base} params={params} sort={sort} align={align} className="px-3 py-3" />;
   return (
     <>

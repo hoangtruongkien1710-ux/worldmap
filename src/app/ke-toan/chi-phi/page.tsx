@@ -5,12 +5,12 @@ import { VoucherRowMenu, loadVoucherLookups } from "@/components/accounting/vouc
 import { createPayable, deletePayable, payPayable, updatePayable } from "@/lib/actions/cash";
 import { can } from "@/lib/auth/permissions";
 import { addDays } from "@/lib/dates";
+import { ExportLink } from "@/components/accounting/export-link";
 import { PageHeader } from "@/components/layout/app-shell";
 import { StatCard, VoucherBadge } from "@/components/accounting/ui";
 import { PeriodBar, SearchForm, qs } from "@/components/accounting/period-bar";
 import { SortTh } from "@/components/ui/sort-th";
-import { pickPeriod, type PeriodSP } from "@/lib/accounting/period";
-import { parseSort, sortRows } from "@/lib/sort";
+import { loadExpenses, type ExpenseSP } from "@/lib/accounting/loaders";
 import { db } from "@/lib/db";
 import { guardPage } from "@/lib/auth/session";
 import { fmtDate, todayVN, toDate, toDay } from "@/lib/dates";
@@ -20,56 +20,21 @@ import { MoneyInput } from "@/components/ui/money-input";
 export const metadata = { title: "Chi phí & mua hàng" };
 export const dynamic = "force-dynamic";
 
-type SP = PeriodSP & { q?: string; tt?: string; xep?: string; chieu?: string; xep2?: string; chieu2?: string };
+type SP = ExpenseSP;
 const BASE = "/ke-toan/chi-phi";
 
 export default async function Page({ searchParams }: { searchParams: Promise<SP> }) {
   const user = await guardPage("accounting.view");
   const post = can(user.role, "accounting.post");
   const sp = await searchParams;
-  const period = pickPeriod(sp);
-  const { from, to } = period;
+  const { period, txns, cats, total, owing, inPeriod, billRows, billSort, vRows, vSort } = await loadExpenses(sp);
   const today = todayVN();
-  const q = sp.q?.trim().toLowerCase();
-  const [txns, payables, paidByPayable] = await Promise.all([
-    db.cashTxn.findMany({
-      where: { voidedAt: null, type: "OUT", date: { gte: toDate(from), lte: toDate(to) } },
-      include: { category: true, account: true, supplier: true },
-      orderBy: [{ date: "desc" }, { code: "desc" }],
-    }),
-    db.payable.findMany({ include: { supplier: true }, orderBy: [{ billDate: "desc" }, { code: "desc" }] }),
-    db.cashTxn.groupBy({ by: ["payableId"], where: { voidedAt: null, payableId: { not: null } }, _sum: { amount: true } }),
-  ]);
   const [suppliers, outCats, accounts, lookups] = post ? await Promise.all([
     db.supplier.findMany({ orderBy: { name: "asc" } }),
     db.txnCategory.findMany({ where: { direction: "OUT", code: { notIn: ["CHI_LUONG", "CHI_BH", "CHI_NCC"] } }, orderBy: { order: "asc" } }),
     db.cashAccount.findMany({ where: { active: true }, orderBy: { code: "asc" } }),
     loadVoucherLookups(),
   ]) : [[], [], [], null];
-  const byCat = new Map<string, { name: string; amount: number; count: number }>();
-  for (const t of txns) {
-    const k = t.category?.code ?? "KHAC";
-    const v = byCat.get(k) ?? { name: t.category?.name ?? "Khác", amount: 0, count: 0 };
-    v.amount += t.amount;
-    v.count += 1;
-    byCat.set(k, v);
-  }
-  const cats = [...byCat.values()].sort((a, b) => b.amount - a.amount);
-  const total = cats.reduce((s, c) => s + c.amount, 0);
-  const paid = (id: string) => paidByPayable.find((p) => p.payableId === id)?._sum.amount ?? 0;
-  const owing = payables.reduce((s, p) => s + Math.max(0, p.amount - paid(p.id)), 0);
-
-  // Hóa đơn mua hàng trong kỳ (theo ngày hóa đơn), lọc theo tình trạng và từ khóa.
-  const inPeriod = payables.filter((p) => toDay(p.billDate) >= from && toDay(p.billDate) <= to);
-  const status = sp.tt === "con-no" ? "debt" : sp.tt === "da-tra" ? "paid" : "all";
-  const bills = inPeriod
-    .map((p) => ({ ...p, paidAmount: paid(p.id), remain: p.amount - paid(p.id) }))
-    .filter((p) => (status === "debt" ? p.remain > 0 : status === "paid" ? p.remain <= 0 : true))
-    .filter((p) => !q || [p.code, p.description, p.supplier?.name].some((v) => v?.toLowerCase().includes(q)));
-  const billSort = parseSort(sp, ["hd", "ncc", "tien", "han", "conlai"]);
-  const billRows = sortRows(bills, billSort, { hd: (p) => `${toDay(p.billDate)}|${p.code}`, ncc: (p) => p.supplier?.name, tien: (p) => p.amount, han: (p) => toDay(p.dueDate), conlai: (p) => p.remain });
-  const vSort = parseSort(sp, ["ngay", "so", "dg", "km", "nguon", "tien"], ["xep2", "chieu2"]);
-  const vRows = sortRows(txns, vSort, { ngay: (t) => `${toDay(t.date)}|${t.code}`, so: (t) => t.code, dg: (t) => t.description, km: (t) => t.category?.name, nguon: (t) => t.account.code, tien: (t) => t.amount });
   const bth = (col: string, label: string, align?: "right") => <SortTh col={col} label={label} base={BASE} params={sp} sort={billSort} align={align} className="px-3 py-2.5" />;
   const vth = (col: string, label: string, align?: "right") => <SortTh col={col} label={label} base={BASE} params={sp} sort={vSort} keys={["xep2", "chieu2"]} align={align} className="px-3 py-2.5" />;
 
@@ -96,6 +61,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<SP>
             </ActionForm>
           </ModalButton>
         )}
+        <ExportLink base={BASE} params={sp} />
       </>} />
       <PeriodBar base={BASE} period={period} params={sp} />
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
