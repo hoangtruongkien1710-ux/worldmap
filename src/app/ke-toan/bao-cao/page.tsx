@@ -408,7 +408,7 @@ async function Payroll({ month }: { month?: string }) {
             <tbody className="divide-y divide-slate-100">
               {r.depts.map((d) => (
                 <tr key={d.key}>
-                  <td className={TD}><div className="font-semibold">{d.label}</div>{d.key === "GIAO_VIEN" && <div className="text-xs text-slate-500">{d.cur.sessions} buổi dạy</div>}</td>
+                  <td className={TD}><div className="font-semibold">{d.label}</div>{d.cur.sessions > 0 && <div className="text-xs text-slate-500">{d.cur.sessions} buổi dạy</div>}</td>
                   <td className={clsx(TD, R)}>{d.cur.count}</td>
                   <td className={clsx(TD, R, "font-semibold")}>{money(d.cur.gross)}</td>
                   <td className={clsx(TD, R)}><div className="text-slate-600">{money(d.prev.gross)}</div><Delta cur={d.cur.gross} prev={d.prev.gross} invert /></td>

@@ -201,7 +201,8 @@ export async function payrollReport(month?: string) {
     const xs = ls.filter((l) => l.employee.department === d);
     return { count: xs.length, gross: sum(xs, gross), insurance: sum(xs, (l) => l.insurance), pit: sum(xs, (l) => l.pit), net: sum(xs, (l) => l.netPay), sessions: sum(xs, (l) => l.teachingSessions ?? 0) };
   };
-  const depts = ["GIAO_VIEN", "VAN_PHONG"].map((d) => ({ key: d, label: d === "GIAO_VIEN" ? "Giáo viên" : "Văn phòng", cur: dept(lines, d), prev: dept(prevLines, d) }));
+  const deptRows = await db.department.findMany({ orderBy: [{ order: "asc" }, { name: "asc" }] });
+  const depts = deptRows.map((d) => ({ key: d.code, label: d.name, cur: dept(lines, d.code), prev: dept(prevLines, d.code) })).filter((d) => d.cur.count + d.prev.count > 0);
   const net = sum(lines, (l) => l.netPay);
   const paid = sum(payTxns, (t) => t.amount);
   return {

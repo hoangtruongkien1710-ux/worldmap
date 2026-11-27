@@ -11,3 +11,6 @@
 - 2026-11-27: Kế toán: sắp xếp theo cột (tăng/giảm/bỏ), thanh thời gian (hôm nay…năm, khoảng ngày), mới nhất trước, sửa chứng từ + hóa đơn mua hàng, trang chi tiết học phí, liên kết giữa sổ/học phí/lương/chi phí, bảng tổng hợp đẹp hơn.
 - 2026-11-27: Kế toán: nút Xuất Excel ở Sổ quỹ, Ngân hàng, Học phí, Chi phí, Tổng hợp, Tiền lương (theo thời gian, bộ lọc, sắp xếp đang xem).
 - 2026-11-27: Tiền lương theo mẫu kế toán: nhập Excel có xem trước, cột Định mức/Tăng ca/Ngày lễ/Ứng lương, Chốt → Trả lương (+Hủy), sửa/xóa dòng, xuất Excel đúng bố cục mẫu, file mẫu tải về.
+- 2026-11-27: Nhập bảng lương: bỏ qua dòng TỔNG CỘNG của file (app tự tính tổng).
+- 2026-11-27: Tiền lương: trang Hồ sơ nhân sự (lọc tên/bộ phận/trạng thái), chi tiết từng người (lịch sử lương chính tăng/giảm, ngày công, buổi dạy theo tháng/năm, xuất Excel, sửa thông tin); tên ở bảng lương bấm vào hồ sơ.
+- 2026-11-27: Nhân sự: bỏ chữ "chi phí" ở ô Bộ phận, thêm bộ phận mới ngay trong popup (bảng Department; chọn hạch toán 632/6422), lọc/báo cáo/chốt lương theo bộ phận.

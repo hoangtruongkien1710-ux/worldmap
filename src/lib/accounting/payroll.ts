@@ -99,11 +99,6 @@ export function parsePayroll(sheetRows: ReadCell[][]): ParsedPayroll {
     rows.push(p);
   }
   if (rows.length === 0) warnings.push("Không có dòng nhân sự nào dưới dòng tiêu đề.");
-  if (totalRow) {
-    const sum = (f: (r: ParsedRow) => number) => rows.reduce((s, r) => s + f(r), 0);
-    const chk: [string, number][] = [["baseSalary", sum((r) => r.baseSalary)], ["bonus", sum((r) => r.bonus)], ["insurance", sum((r) => r.insurance)], ["pit", sum((r) => r.pit)], ["advance", sum((r) => r.advance)], ["net", sum((r) => r.netFile ?? 0)]];
-    for (const [k, v] of chk) if (totalRow[k] !== undefined && Math.abs(totalRow[k] - v) > 1) warnings.push(`Dòng TỔNG CỘNG (${k}) ${totalRow[k].toLocaleString("vi-VN")} ≠ cộng các dòng ${v.toLocaleString("vi-VN")}.`);
-  }
   return { month, rows, warnings, totalRow };
 }
 

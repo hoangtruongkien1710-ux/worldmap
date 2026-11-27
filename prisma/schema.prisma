@@ -469,6 +469,14 @@ model Supplier {
   payables Payable[]
 }
 
+/// Bộ phận nhân sự. costAccount: tài khoản chi phí lương hạch toán khi chốt (632 giảng dạy / 6422 quản lý).
+model Department {
+  code        String @id
+  name        String @unique
+  costAccount String @default("6422")
+  order       Int    @default(0)
+}
+
 model Employee {
   id           String        @id @default(cuid())
   code         String        @unique // trùng mã trên máy chấm công / bảng lương

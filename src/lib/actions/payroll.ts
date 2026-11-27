@@ -91,7 +91,7 @@ export async function importPayroll(_: ActionResult, f: FormData) {
       for (const { r, found, newCode } of a.rows) {
         const dept = departmentOf(r.position);
         const emp = found
-          ? await tx.employee.update({ where: { id: found.id }, data: { active: true, ...(r.position ? { position: r.position, department: dept } : {}) } })
+          ? await tx.employee.update({ where: { id: found.id }, data: { active: true, ...(r.position ? { position: r.position } : {}) } })
           : await tx.employee.create({ data: { code: newCode!, fullName: r.name, department: dept, position: r.position, userId: dept === "GIAO_VIEN" ? userByName.get(norm(r.name)) ?? null : null } });
         await tx.payrollLine.create({
           data: {
@@ -116,8 +116,10 @@ export async function lockPayroll(periodId: string, _: ActionResult) {
     const p = await periodOf(periodId);
     if (p.status !== "IMPORTED") throw new UserError("Bảng lương này đã chốt.");
     if (p.lines.length === 0) throw new UserError("Bảng lương không có nhân sự nào.");
-    const sum = (f: (l: (typeof p.lines)[number]) => number, dept?: string) => p.lines.filter((l) => !dept || l.employee.department === dept).reduce((s, l) => s + f(l), 0);
-    const teacher = sum(grossOf, "GIAO_VIEN"), office = sum(grossOf, "VAN_PHONG");
+    const depts = await db.department.findMany();
+    const costOf = (code: string) => depts.find((d) => d.code === code)?.costAccount === "632" ? "632" : "6422";
+    const sum = (f: (l: (typeof p.lines)[number]) => number, cost?: string) => p.lines.filter((l) => !cost || costOf(l.employee.department) === cost).reduce((s, l) => s + f(l), 0);
+    const teacher = sum(grossOf, "632"), office = sum(grossOf, "6422");
     const ins = sum((l) => l.insurance), pit = sum((l) => l.pit);
     // Có 334 gồm cả phần ứng lương: các khoản đã ứng chi trước bằng phiếu chi "Trả lương" (Nợ 334) sẽ bù trừ.
     await db.$transaction(async (tx) => {
@@ -237,4 +239,28 @@ export async function deletePayrollLine(lineId: string, _: ActionResult) {
     await audit(user.id, "delete", "PayrollLine", l.id, { employee: l.employee.code, month: l.period.month });
     return `Đã bỏ ${l.employee.fullName} khỏi bảng lương.`;
   }, PATHS);
+}
+
+/** Sửa thông tin nhân sự trong hồ sơ lương. */
+export async function updateEmployee(id: string, _: ActionResult, f: FormData) {
+  return run(async () => {
+    const user = await requirePermission("accounting.post");
+    const fullName = req(f, "fullName", "họ tên");
+    if (fullName.length > 60) throw new UserError("Họ tên tối đa 60 ký tự.", "fullName");
+    let department = str(f, "department");
+    if (department === "__new") {
+      const name = str(f, "newDeptName").replace(/\s+/g, " ").trim();
+      if (!name) throw new UserError("Nhập tên bộ phận mới.", "newDeptName");
+      if (name.length > 40) throw new UserError("Tên bộ phận tối đa 40 ký tự.", "newDeptName");
+      const dup = await db.department.findFirst({ where: { name: { equals: name, mode: "insensitive" } } });
+      if (dup) throw new UserError("Đã có bộ phận tên này, hãy chọn trong danh sách.", "newDeptName");
+      const count = await db.department.count();
+      const created = await db.department.create({ data: { code: `BP-${Date.now().toString(36).toUpperCase()}`, name, costAccount: str(f, "newDeptCost") === "632" ? "632" : "6422", order: count + 1 } });
+      department = created.code;
+    } else if (!(await db.department.findUnique({ where: { code: department } }))) throw new UserError("Chọn bộ phận.", "department");
+    const position = str(f, "position").slice(0, 80) || null;
+    await db.employee.update({ where: { id }, data: { fullName, department, position, active: f.get("active") === "1" } });
+    await audit(user.id, "update", "Employee", id, { fullName });
+    return "Đã lưu thông tin nhân sự.";
+  }, ["/ke-toan"]);
 }

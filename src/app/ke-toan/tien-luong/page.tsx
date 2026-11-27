@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Banknote, FileUp, Lock, LockOpen, Pencil, ShieldCheck, Trash2, Undo2, Users, Wallet} from "lucide-react";
 import { ExportLink } from "@/components/accounting/export-link";
 import { PayrollImportForm } from "@/components/accounting/payroll-import";
@@ -73,6 +74,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<SP>
   return (
     <>
       <PageHeader title="Tiền lương" subtitle={`Bảng lương tháng ${monthTxt} · nhập từ file ${period.sourceFile} ngày ${fmtDate(period.importedAt)}`} actions={actions} />
+      <div className="mb-4"><Tabs items={[{ href: BASE, label: "Bảng lương theo tháng", active: true }, { href: `${BASE}/nhan-su`, label: "Hồ sơ nhân sự", active: false }]} /></div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <Tabs items={periods.map((p) => ({ href: `${BASE}?thang=${p.month}`, label: monthLabel(p.month), active: p.id === period.id }))} />
         <span className={`badge ${st.cls}`}>{st.label}</span>
@@ -129,7 +131,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<SP>
               {lines.map((l, i) => (
                 <tr key={l.id} className="hover:[&>td]:bg-slate-100/60">
                   <td className="sticky left-0 z-10 px-3 py-2.5 text-slate-400">{i + 1}</td>
-                  <td className="sticky left-12 z-10 min-w-[180px] px-3 py-2.5 font-medium"><div>{l.employee.fullName}</div><div className="text-xs font-normal text-slate-400">{l.employee.code}</div></td>
+                  <td className="sticky left-12 z-10 min-w-[180px] px-3 py-2.5 font-medium"><Link href={`${BASE}/nhan-su/${l.employee.id}`} className="text-brand-700 hover:underline">{l.employee.fullName}</Link><div className="text-xs font-normal text-slate-400">{l.employee.code}</div></td>
                   <td className="px-3 py-2.5 text-slate-600">{l.employee.position ?? "—"}</td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-right text-slate-600">{dash(l.salaryNorm)}</td>
                   <td className="px-3 py-2.5 text-right">{Number(l.workDays)}</td>

@@ -26,8 +26,8 @@ describe("công thức lương", () => {
 });
 
 describe("đọc bảng lương Excel", () => {
-  it("đọc tháng, dòng nhân sự và khớp dòng TỔNG CỘNG", () => {
-    const p = parsePayroll(sheet(body([["", "TỔNG CỘNG", "", "", "", "", 14000000, 0, 0, 500000, 100000, 1470000, 0, 14600000, 1000000, 12130000]])));
+  it("đọc tháng, dòng nhân sự và bỏ qua dòng TỔNG CỘNG", () => {
+    const p = parsePayroll(sheet(body([["", "TỔNG CỘNG", "", "", "", "", 14000000, 0, 0, 500000, 100000, 1470000, 0, 14600000, 1000000, 1]])));
     expect(p.month).toBe("2026-11");
     expect(p.rows).toHaveLength(2);
     expect(p.rows.every((r) => r.errors.length === 0)).toBe(true);

@@ -138,3 +138,43 @@ export async function loadPayroll(sp: PayrollSP) {
   });
   return { periods, period, lines, sort };
 }
+
+/* ---------------- Hồ sơ lương nhân sự ---------------- */
+export type StaffSP = { q?: string; bp?: string; tt?: string; nam?: string };
+
+export async function loadStaff(sp: StaffSP) {
+  const q = (sp.q ?? "").trim();
+  const employees = await db.employee.findMany({
+    where: {
+      ...(sp.bp ? { department: sp.bp } : {}),
+      ...(sp.tt === "nghi" ? { active: false } : sp.tt === "tatca" ? {} : { active: true }),
+      ...(q ? { OR: [{ fullName: { contains: q, mode: "insensitive" as const } }, { code: { contains: q, mode: "insensitive" as const } }, { position: { contains: q, mode: "insensitive" as const } }] } : {}),
+    },
+    include: { payrollLines: { include: { period: { select: { month: true, status: true } } } } },
+    orderBy: { code: "asc" },
+  });
+  const departments = await db.department.findMany({ orderBy: [{ order: "asc" }, { name: "asc" }] });
+  const rows = employees.map((e) => {
+    const ls = [...e.payrollLines].sort((a, b) => a.period.month.localeCompare(b.period.month));
+    const last = ls[ls.length - 1];
+    const prev = ls[ls.length - 2];
+    return { e, months: ls.length, last, prev };
+  });
+  return { rows, q, departments };
+}
+
+export async function loadStaffDetail(id: string, sp: StaffSP) {
+  const e = await db.employee.findUnique({ where: { id }, include: { payrollLines: { include: { period: { select: { month: true, status: true } } } } } });
+  if (!e) return null;
+  const asc = [...e.payrollLines].sort((a, b) => a.period.month.localeCompare(b.period.month));
+  const all = asc.map((l, i) => ({
+    id: l.id, month: l.period.month, status: l.period.status, baseSalary: l.baseSalary, salaryNorm: l.salaryNorm, workDays: Number(l.workDays), sessions: l.teachingSessions,
+    gross: grossOf(l), netPay: l.netPay, dBase: i ? l.baseSalary - asc[i - 1].baseSalary : 0, dNorm: i ? l.salaryNorm - asc[i - 1].salaryNorm : 0,
+  }));
+  const departments = await db.department.findMany({ orderBy: [{ order: "asc" }, { name: "asc" }] });
+  const years = [...new Set(all.map((l) => l.month.slice(0, 4)))].sort().reverse();
+  const nam = years.includes(sp.nam ?? "") ? sp.nam! : "";
+  const lines = (nam ? all.filter((l) => l.month.startsWith(nam)) : all).slice().reverse();
+  const changes = all.filter((l, i) => i > 0 && (l.dBase !== 0 || l.dNorm !== 0)).reverse();
+  return { e, all, lines, years, nam, changes, departments };
+}
