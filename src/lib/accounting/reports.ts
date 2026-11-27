@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { addDays, monthRange, shiftMonth, toDate, toDay } from "@/lib/dates";
 import { loadInvoices } from "@/lib/tuition/summary";
 import { signedFor } from "./cash";
+import { grossOf } from "./payroll";
 import { ledgerBalance, profitAndLoss } from "./queries";
 
 const sum = <T,>(xs: T[], f: (x: T) => number) => xs.reduce((s, x) => s + f(x), 0);
@@ -195,7 +196,7 @@ export async function payrollReport(month?: string) {
     load(period.id), load(prevPeriod?.id),
     db.cashTxn.findMany({ where: { payrollPeriodId: period.id, voidedAt: null }, orderBy: { date: "asc" } }),
   ]);
-  const gross = (l: (typeof lines)[number]) => l.baseSalary + l.allowance + l.bonus - l.deduction;
+  const gross = (l: (typeof lines)[number]) => grossOf(l);
   const dept = (ls: typeof lines, d: string) => {
     const xs = ls.filter((l) => l.employee.department === d);
     return { count: xs.length, gross: sum(xs, gross), insurance: sum(xs, (l) => l.insurance), pit: sum(xs, (l) => l.pit), net: sum(xs, (l) => l.netPay), sessions: sum(xs, (l) => l.teachingSessions ?? 0) };

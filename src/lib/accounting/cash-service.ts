@@ -17,6 +17,7 @@ export type CashTxnInput = {
   studentId?: string | null;
   paymentId?: string | null;
   payableId?: string | null;
+  payrollPeriodId?: string | null;
   /** Dòng đối ứng (TK Có khi thu, TK Nợ khi chi). */
   other: EntryLine;
 };
@@ -31,7 +32,7 @@ export async function createCashTxn(tx: Tx, i: CashTxnInput) {
     data: {
       code, type: i.type, date: toDate(i.day), accountId: account.id, amount: i.amount, description: i.description,
       categoryId: i.categoryId ?? null, counterparty: i.counterparty ?? null, supplierId: i.supplierId ?? null,
-      studentId: i.studentId ?? null, paymentId: i.paymentId ?? null, payableId: i.payableId ?? null,
+      studentId: i.studentId ?? null, paymentId: i.paymentId ?? null, payableId: i.payableId ?? null, payrollPeriodId: i.payrollPeriodId ?? null,
     },
   });
   const cash: EntryLine = { accountCode: account.ledgerCode, cashAccountId: account.id, [i.type === "IN" ? "debit" : "credit"]: i.amount };

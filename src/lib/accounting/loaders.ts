@@ -1,3 +1,4 @@
+import { grossOf } from "./payroll";
 import { db } from "@/lib/db";
 import { toDate, toDay } from "@/lib/dates";
 import { monthsIn, pickPeriod, type PeriodSP } from "./period";
@@ -122,7 +123,7 @@ export async function loadTrial(sp: TrialSP) {
 
 /* ---------------- Tiền lương ---------------- */
 export type PayrollSP = { thang?: string; xep?: string; chieu?: string };
-export const PAYROLL_SORT = ["ma", "ten", "cong", "buoi", "luong", "phucap", "thuong", "bhxh", "thue", "thuclinh"];
+export const PAYROLL_SORT = ["ma", "ten", "chucvu", "dinhmuc", "cong", "buoi", "luong", "tangca", "le", "phucap", "thuong", "bhxh", "thue", "tong", "ung", "thuclinh"];
 
 export async function loadPayroll(sp: PayrollSP) {
   const periods = await db.payrollPeriod.findMany({ orderBy: { month: "desc" } });
@@ -132,6 +133,7 @@ export async function loadPayroll(sp: PayrollSP) {
   const raw = await db.payrollLine.findMany({ where: { periodId: period.id }, include: { employee: true }, orderBy: { employee: { code: "asc" } } });
   const lines = sortRows(raw, sort, {
     ma: (l) => l.employee.code, ten: (l) => l.employee.fullName, cong: (l) => Number(l.workDays), buoi: (l) => l.teachingSessions, luong: (l) => l.baseSalary,
+    chucvu: (l) => l.employee.position ?? "", dinhmuc: (l) => l.salaryNorm, tangca: (l) => l.overtimePay, le: (l) => l.holidayPay, tong: (l) => grossOf(l), ung: (l) => l.advance,
     phucap: (l) => l.allowance, thuong: (l) => l.bonus, bhxh: (l) => l.insurance, thue: (l) => l.pit, thuclinh: (l) => l.netPay,
   });
   return { periods, period, lines, sort };

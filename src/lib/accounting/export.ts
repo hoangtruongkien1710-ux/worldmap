@@ -3,6 +3,7 @@ import { can } from "@/lib/auth/permissions";
 import { fmtDate, todayVN, toDay } from "@/lib/dates";
 import { VOUCHER_LABEL, type BookRow } from "@/components/accounting/ui";
 import { orderBook } from "./book-sort";
+import { grossOf } from "./payroll";
 import type { loadExpenses, loadFees, loadPayroll, loadTrial } from "./loaders";
 import type { Period } from "./period";
 import type { Sheet } from "@/lib/xlsx";
@@ -87,12 +88,32 @@ export function trialSheets(d: Awaited<ReturnType<typeof loadTrial>>, types: Rec
   ];
 }
 
+/** Cột bảng lương theo mẫu kế toán (thêm "Mã NV" ở cột B để khớp nhân sự chắc chắn khi nhập lại). */
+export const PAYROLL_HEAD = ["STT", "Mã NV", "Họ tên", "Chức vụ", "Định mức lương", "Ngày công thực tế", "Buổi dạy", "Lương chính", "Lương tăng ca", "Lương ngày lễ", "Phụ cấp", "Thưởng", "BHXH", "Thuế TNCN", "Tổng lương", "Ứng lương", "Thực lĩnh"];
+const PAYROLL_WIDTHS = [6, 10, 26, 24, 14, 12, 10, 14, 13, 13, 12, 12, 12, 12, 15, 12, 15];
+
+type PayLine = Awaited<ReturnType<typeof loadPayroll>> extends infer D ? (D extends { lines: (infer L)[] } ? L : never) : never;
+const payRow = (l: PayLine, i: number) => [i + 1, l.employee.code, l.employee.fullName, l.employee.position ?? "", l.salaryNorm || null, Number(l.workDays), l.teachingSessions, l.baseSalary, l.overtimePay || null, l.holidayPay || null, l.allowance || null, l.bonus || null, l.insurance || null, l.pit || null, grossOf(l), l.advance || null, l.netPay];
+
+/** Bảng lương đúng bố cục file mẫu: tiêu đề dòng 2, tiêu đề cột dòng 4, dòng TỔNG CỘNG cuối → nhập lại được. */
 export function payrollSheets(d: NonNullable<Awaited<ReturnType<typeof loadPayroll>>>): Sheet[] {
-  const sum = (f: (l: (typeof d.lines)[number]) => number) => d.lines.reduce((s, l) => s + f(l), 0);
+  const sum = (f: (l: PayLine) => number) => d.lines.reduce((s, l) => s + f(l), 0);
+  const [y, m] = d.period.month.split("-");
   return [{
-    name: `Lương ${d.period.month}`, widths: [10, 26, 20, 10, 10, 14, 12, 12, 12, 12, 12, 14],
-    rows: [["Mã NV", "Họ tên", "Chức vụ", "Ngày công", "Buổi dạy", "Lương chính", "Phụ cấp", "Thưởng", "Khấu trừ khác", "BHXH", "Thuế TNCN", "Thực lĩnh"],
-      ...d.lines.map((l) => [l.employee.code, l.employee.fullName, l.employee.position, Number(l.workDays), l.teachingSessions, l.baseSalary, l.allowance, l.bonus || null, l.deduction || null, l.insurance || null, l.pit || null, l.netPay]),
-      ["", "Cộng", "", "", "", sum((l) => l.baseSalary), sum((l) => l.allowance), sum((l) => l.bonus), sum((l) => l.deduction), sum((l) => l.insurance), sum((l) => l.pit), sum((l) => l.netPay)]],
+    name: `Lương ${d.period.month}`, widths: PAYROLL_WIDTHS, headerRows: [3], freeze: 4,
+    rows: [[], ["", "", `Bảng lương tháng ${m}/${y}`], [], PAYROLL_HEAD,
+      ...d.lines.map(payRow),
+      ["", "", "TỔNG CỘNG", "", "", "", sum((l) => l.teachingSessions ?? 0), sum((l) => l.baseSalary), sum((l) => l.overtimePay), sum((l) => l.holidayPay), sum((l) => l.allowance), sum((l) => l.bonus), sum((l) => l.insurance), sum((l) => l.pit), sum(grossOf), sum((l) => l.advance), sum((l) => l.netPay)]],
+  }];
+}
+
+/** File mẫu trống để kế toán điền rồi nhập vào app. */
+export function payrollTemplate(month: string): Sheet[] {
+  const [y, m] = month.split("-");
+  return [{
+    name: `Lương ${month}`, widths: PAYROLL_WIDTHS, headerRows: [3], freeze: 4,
+    rows: [[], ["", "", `Bảng lương tháng ${m}/${y}`], [], PAYROLL_HEAD,
+      [1, "", "Nguyễn Văn A (ví dụ, xóa dòng này)", "Giáo viên IELTS", 8000000, 26, 40, 8000000, 0, 0, 500000, 0, 840000, 0, 8500000, 0, 7660000],
+      ["", "", "TỔNG CỘNG"]],
   }];
 }

@@ -543,10 +543,14 @@ model PayrollLine {
   employee         Employee      @relation(fields: [employeeId], references: [id])
   workDays         Decimal       @db.Decimal(5, 2)
   teachingSessions Int?
-  baseSalary       Int
+  salaryNorm       Int           @default(0) // định mức lương (tháng, hoặc đơn giá/buổi với GV theo buổi)
+  baseSalary       Int // lương chính
+  overtimePay      Int           @default(0) // lương tăng ca
+  holidayPay       Int           @default(0) // lương ngày lễ
   allowance        Int           @default(0)
   bonus            Int           @default(0)
-  deduction        Int           @default(0)
+  advance          Int           @default(0) // ứng lương đã chi trong tháng, trừ vào thực lĩnh
+  deduction        Int           @default(0) // khấu trừ khác
   insurance        Int           @default(0)
   pit              Int           @default(0)
   netPay           Int
